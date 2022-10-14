@@ -22,10 +22,16 @@ const buildCriteriaString = (fields) => {
   for (let index = 0; index < fields.length; index++) {
     const splittedString = fields[index].name.value.split("_");
     const key = splittedString[0];
-    const operator = composeOperator(splittedString);
-    const value = fields[index].value.value;
+    if (splittedString.length === 1) {
+      const value = fields[index].value.value;
+      criteriaString += `.${key} == "${value}"`;
+    }
+    else {
+      const operator = composeOperator(splittedString); 
+      const value = fields[index].value.value;
 
-    criteriaString += `.${key}.${operator}("${value}")`;
+      criteriaString += `.${key}.${operator}("${value}")`;
+    }
     criteriaString += index < fields.length - 1 ? ' && ' : '';
   }
   return criteriaString;
@@ -78,7 +84,7 @@ const getLastExpression = (input, result) => {
 
 const query = `
 query MyQuery {
-    TRP_TreatmentPlans(orderBy: name_ASC, where: {name_starts_with: "Jamie"}) {
+    TRP_TreatmentPlans(orderBy: name_ASC, where: {id: "ckadqdbhk00go0148zzxh4bbq", updatedAt: "", name_contains: ""}) {
       treatments(where: {title_starts_with: "Union"}) {
         selectedItems {
           quantity {
