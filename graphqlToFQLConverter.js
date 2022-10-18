@@ -84,16 +84,16 @@ const getLastExpression = (input, result) => {
 
 const query = `
 query MyQuery {
-    TRP_TreatmentPlans(orderBy: name_ASC, where: {id: "ckadqdbhk00go0148zzxh4bbq", updatedAt: "", name_contains: ""}) {
-      treatments(where: {title_starts_with: "Union"}) {
-        selectedItems {
-          quantity {
-            items
-          }
+  TRP_TreatmentPlans(orderBy: name_ASC, where: {id: "ckadqdbhk00go0148zzxh4bbq", updatedAt: "", name_contains: ""}) {
+    treatments(where: {title_starts_with: "Union"}) {
+      selectedItems {
+        quantity {
+          items
         }
       }
     }
-  }   
+  }
+}  
 `;
 
 const convertGraphQLToFQL = (query) => {
@@ -116,4 +116,8 @@ const convertGraphQLToFQL = (query) => {
   return fqlString;
 };
 
-console.log(convertGraphQLToFQL(query));
+// console.log(convertGraphQLToFQL(query));
+
+module.exports = {
+  convertGraphQLToFQL
+}
