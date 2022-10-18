@@ -1,8 +1,15 @@
 const operatorMap = {
 'contains' : 'includes',
-'is' : '=='
+'eq' : '==',
+'gt': '>',
+'gte' : '>=',
+'lt' : '<',
+'lte' : '<='
 }
 
+const numberOperators = ['==', '>', '>=', '<', '<='];
+
 module.exports = {
-  operatorMap
+  operatorMap,
+  numberOperators
 }

@@ -1,4 +1,4 @@
-const { operatorMap } = require("./constants");
+const { operatorMap, numberOperators } = require("./constants");
 const { convertGraphQLToFQL } = require("./graphqlToFQLConverter");
 
 const requestBody = {
@@ -7,18 +7,27 @@ const requestBody = {
   "source": {
     "type": "Fact",
     "name": "nationality",
-    "value": 'query User {user(where: {id: "ckadqdbhk00go0148zzxh4bbq"}) {nationality}}'
+    "value": `query User {
+      user(where: {id: "ckadqdbhk00go0148zzxh4bbq"}) {
+        nationality
+      }
+    }`
   },
-  "comparator": "contains",
+  "comparator": "eq",
   "target": {
-    "type": "String",
-    "value": "France"
+    "type": "Fact",
+    "name": "nationality",
+    "value": 'query User {user(where: {id: "ckadqdbhk00go0148zzxh4bbq"}) {nationality}}'
   }
 }
 
 const buildUDF = () => {
   const { type } = requestBody;
   switch (type.toLowerCase()) {
+    case "rule":
+      const rule = buildRule(requestBody);
+      console.log(rule);
+      break;
     case "condition":
       const condition = buildCondition(requestBody);
       console.log(condition);
@@ -32,13 +41,13 @@ const buildCondition = (data) => {
   const operatorString = getCorrectOperator(comparator);
   const targetString = getTargetString(operatorString, target);
 
-  return operatorString == '=='
+  return numberOperators.includes(operatorString)
     ? `${sourceString} ${operatorString} ${targetString}`
     : `${sourceString}.${operatorString}${targetString}`;
 }
 
 const getCorrectOperator = (operator) => {
-  return operatorMap[operator] || operator;
+  return operatorMap[operator.toLowerCase()] || operator;
 }
 
 const getTargetString = (operatorString, target) => {
@@ -52,6 +61,10 @@ const getTargetString = (operatorString, target) => {
     return operatorString == '==' ? `"${value}"`: `("${value}")`
 
   return value;
+}
+
+const buildRule = (data) => {
+  
 }
 
 buildUDF();
