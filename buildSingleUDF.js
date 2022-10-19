@@ -2,23 +2,56 @@ const { operatorMap, numberOperators } = require("./constants");
 const { convertGraphQLToFQL } = require("./graphqlToFQLConverter");
 
 const requestBody = {
-  "type": "Condition",
-  "name": "isNationalityFrance",
-  "source": {
-    "type": "Fact",
-    "name": "nationality",
-    "value": `query User {
-      user(where: {id: "ckadqdbhk00go0148zzxh4bbq"}) {
-        nationality
+  "type": "Rule",
+  "name": "isEligableForCredit",
+  "all": [
+    {
+      "type": "Condition",
+      "name": "isNationalityFrance",
+      "source": {
+        "type": "Fact",
+        "name": "nationality",
+        "value": 'query User {user(where: {id: "ckadqdbhk00go0148zzxh4bbq"}) {nationality}}'
+      },
+      "comparator": "eq",
+      "target": {
+        "type": "String",
+        "value": "France"
       }
-    }`
-  },
-  "comparator": "eq",
-  "target": {
-    "type": "Fact",
-    "name": "nationality",
-    "value": 'query User {user(where: {id: "ckadqdbhk00go0148zzxh4bbq"}) {nationality}}'
-  }
+    },
+    {
+      "any": [
+        {
+          "type": "Condition",
+          "name": "isIncomeHigherThan2000",
+          "source": {
+            "type": "Fact",
+            "name": "income",
+            "value": 'query User {user(where: {id: "ckadqdbhk00go0148zzxh4bbq"}) {income}}'
+          },
+          "comparator": "gt",
+          "target": {
+            "type": "Number",
+            "value": 2000
+          }
+        },
+        {
+          "type": "Condition",
+          "name": "hasJob",
+          "source": {
+            "type": "Fact",
+            "name": "job",
+            "value": 'query User {user(where: {id: "ckadqdbhk00go0148zzxh4bbq"}) {job}}'
+          },
+          "comparator": "eq",
+          "target": {
+            "type": "Boolean",
+            "value": true
+          }
+        }
+      ]
+    }
+  ]
 }
 
 const buildUDF = () => {
@@ -54,17 +87,42 @@ const getTargetString = (operatorString, target) => {
   const { type, value } = target;
 
   if (type.toLowerCase() === 'fact')
-    return operatorString == '==' 
-    ? `${convertGraphQLToFQL(value)}` 
-    : `(${convertGraphQLToFQL(value)})`;
+    return operatorString == '=='
+      ? `${convertGraphQLToFQL(value)}`
+      : `(${convertGraphQLToFQL(value)})`;
   else if (type.toLowerCase() === 'string')
-    return operatorString == '==' ? `"${value}"`: `("${value}")`
+    return operatorString == '==' ? `"${value}"` : `("${value}")`
 
   return value;
 }
 
+const buildNestedConditions = (data, operator) => {
+  let ruleString = '';
+  for (let index = 0; index < data.length; index++) {
+    const { all: allInner, any: anyInner } = data[index];
+    if (allInner)
+      ruleString += `(${buildRule(data[index])})`;
+    else if (anyInner)
+      ruleString += `(${buildRule(data[index])})`;
+    else
+      ruleString += `${buildCondition(data[index])}`;
+
+    if (index != data.length - 1)
+      ruleString += ` ${operator} `;
+  }
+  return ruleString;
+}
+
 const buildRule = (data) => {
-  
+  const { all, any } = data;
+  let ruleString = '';
+  if (all) {
+    ruleString+= `${buildNestedConditions(all, '&&')}`;
+  }
+  else if (any) {
+    ruleString+= `${buildNestedConditions(any, '||')}`;
+  }
+  return `${ruleString}`;
 }
 
 buildUDF();
