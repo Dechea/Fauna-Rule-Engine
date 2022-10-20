@@ -86,11 +86,11 @@ const requestBody = {
   ]
 }
 
-const buildUDF = () => {
+const buildRule = () => {
   const { type } = requestBody;
   switch (type.toLowerCase()) {
     case "rule":
-      const rule = buildRule(requestBody);
+      const rule = buildCompositeRule(requestBody);
       console.log(rule);
       break;
     case "condition":
@@ -133,9 +133,9 @@ const buildNestedConditions = (data, operator) => {
   for (let index = 0; index < data.length; index++) {
     const { all: allInner, any: anyInner } = data[index];
     if (allInner)
-      ruleString += `(${buildRule(data[index])})`;
+      ruleString += `(${buildCompositeRule(data[index])})`;
     else if (anyInner)
-      ruleString += `(${buildRule(data[index])})`;
+      ruleString += `(${buildCompositeRule(data[index])})`;
     else
       ruleString += `${buildCondition(data[index])}`;
 
@@ -145,7 +145,7 @@ const buildNestedConditions = (data, operator) => {
   return ruleString;
 }
 
-const buildRule = (data) => {
+const buildCompositeRule = (data) => {
   const { all, any } = data;
   let ruleString = '';
   if (all) {
@@ -157,4 +157,4 @@ const buildRule = (data) => {
   return `${ruleString}`;
 }
 
-buildUDF();
+buildRule();
