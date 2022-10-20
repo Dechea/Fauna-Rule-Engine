@@ -48,6 +48,38 @@ const requestBody = {
             "type": "Boolean",
             "value": true
           }
+        },
+        {
+          "all": [
+            {
+              "type": "Condition",
+              "name": "isIncomeHigherThan2000",
+              "source": {
+                "type": "Fact",
+                "name": "income",
+                "value": 'query User {user(where: {id: "ckadqdbhk00go0148zzxh4bbq"}) {income}}'
+              },
+              "comparator": "gt",
+              "target": {
+                "type": "Number",
+                "value": 2000
+              }
+            },
+            {
+              "type": "Condition",
+              "name": "hasJob",
+              "source": {
+                "type": "Fact",
+                "name": "job",
+                "value": 'query User {user(where: {id: "ckadqdbhk00go0148zzxh4bbq"}) {job}}'
+              },
+              "comparator": "eq",
+              "target": {
+                "type": "Boolean",
+                "value": true
+              }
+            }
+          ]
         }
       ]
     }
@@ -117,10 +149,10 @@ const buildRule = (data) => {
   const { all, any } = data;
   let ruleString = '';
   if (all) {
-    ruleString+= `${buildNestedConditions(all, '&&')}`;
+    ruleString += `${buildNestedConditions(all, '&&')}`;
   }
   else if (any) {
-    ruleString+= `${buildNestedConditions(any, '||')}`;
+    ruleString += `${buildNestedConditions(any, '||')}`;
   }
   return `${ruleString}`;
 }
