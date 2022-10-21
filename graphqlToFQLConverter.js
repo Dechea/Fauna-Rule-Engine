@@ -96,6 +96,22 @@ query MyQuery {
 }  
 `;
 
+const getBaseQuery = (query) => {
+  let fqlString = '';
+  const parsedQuery = parse(query);
+  const selections = parsedQuery.definitions[0].selectionSet.selections[0];
+  const collectionName = selections.name.value;
+  const args = selections.arguments;
+
+  fqlString += `${collectionName}.all`;
+  const { sortCriteria, filterCriteria } = getCollectionLevelCriteria(args);
+
+  fqlString += sortCriteria ? `.${sortCriteria}` : '';
+  fqlString += filterCriteria ? `.${filterCriteria}` : '';
+
+  return fqlString;
+}
+
 const convertGraphQLToFQL = (query) => {
   let fqlString = '';
   const parsedQuery = parse(query);
@@ -119,5 +135,7 @@ const convertGraphQLToFQL = (query) => {
 // console.log(convertGraphQLToFQL(query));
 
 module.exports = {
-  convertGraphQLToFQL
+  convertGraphQLToFQL,
+  getCollectionLevelCriteria,
+  getBaseQuery
 }

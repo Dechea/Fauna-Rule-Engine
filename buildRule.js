@@ -1,5 +1,5 @@
 const { operatorMap, numberOperators } = require("./constants");
-const { convertGraphQLToFQL } = require("./graphqlToFQLConverter");
+const { convertGraphQLToFQL, getBaseQuery } = require("./graphqlToFQLConverter");
 
 const requestBody = {
   "type": "Rule",
@@ -11,7 +11,7 @@ const requestBody = {
       "source": {
         "type": "Fact",
         "name": "nationality",
-        "value": 'query User {user(where: {id: "ckadqdbhk00go0148zzxh4bbq"}) {nationality}}'
+        "value": 'query User {author(where: {id: "ckadqdbhk00go0148zzxh4bbq"}) {nationality}}'
       },
       "comparator": "eq",
       "target": {
@@ -27,7 +27,7 @@ const requestBody = {
           "source": {
             "type": "Fact",
             "name": "income",
-            "value": 'query User {user(where: {id: "ckadqdbhk00go0148zzxh4bbq"}) {income}}'
+            "value": 'query User {posts(where: {id: "ckadqdbhk00go0148zzxh4bbq", name: "Micha"}) {income}}'
           },
           "comparator": "gt",
           "target": {
@@ -41,7 +41,7 @@ const requestBody = {
           "source": {
             "type": "Fact",
             "name": "job",
-            "value": 'query User {user(where: {id: "ckadqdbhk00go0148zzxh4bbq"}) {job}}'
+            "value": 'query User {posts(where: {id: "ckadqdbhk00go0148zzxh4bbq", name: "Micha"}) {job}}'
           },
           "comparator": "eq",
           "target": {
@@ -86,12 +86,62 @@ const requestBody = {
   ]
 }
 
+const getQueries = (data, queries) => {
+  if (!data)
+    return;
+
+  for (let index = 0; index < data.length; index++) {
+    const { all, any } = data[index];
+    if (all)
+      getQueries(all, queries);
+    else if (any)
+      getQueries(any, queries);
+    else {
+      const { source, target } = data[index];
+      if (source?.type?.toLowerCase() === 'fact')
+        queries.push(source.value);
+      if (target?.type?.toLowerCase() === 'fact')
+        queries.push(target.value);
+    }
+  }
+}
+
+/* Optimizing performance and cost of rule by finding duplicated code */
+const optimizeRule = (data, simpleRule) => {
+  const { all, any } = data;
+  const queries = [];
+  getQueries(all, queries);
+  getQueries(any, queries);
+
+  const map = new Map();
+  let varsString = '';
+  let index = 0;
+
+  for (const query of queries) {
+    const udfString = getBaseQuery(query);
+    if (!map.has(udfString)) {
+      map.set(udfString, 1);
+    }
+    else if (map.get(udfString) == 1) {
+      varsString += varsString == ''
+        ? `let var${index} = ${udfString}`
+        : `\nlet var${index} = ${udfString}`;
+      simpleRule = simpleRule.replaceAll(udfString, `var${index}`);
+      map.set(udfString, map.get(udfString) + 1);
+      index++;
+    }
+  }
+
+  return `${varsString}\n${simpleRule}`;
+}
+
 const buildRule = () => {
   const { type } = requestBody;
   switch (type.toLowerCase()) {
     case "rule":
-      const rule = buildCompositeRule(requestBody);
-      console.log(rule);
+      const simpleRule = buildCompositeRule(requestBody);
+      const optimizedRule = optimizeRule(requestBody, simpleRule);
+      console.log(optimizedRule);
       break;
     case "condition":
       const condition = buildCondition(requestBody);
