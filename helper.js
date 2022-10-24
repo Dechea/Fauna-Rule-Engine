@@ -23,8 +23,16 @@ const checkBool = (bool) => {
 			typeof bool.value === 'boolean');
 }
 
+const getByValue = (map, searchValue) => {
+	for (let [key, value] of map.entries()) {
+		if (value === searchValue)
+			return key;
+	}
+}
+
 module.exports = {
 	capitalizeFirstLetter,
 	removeQuotes,
-	checkBool
+	checkBool,
+	getByValue
 }

@@ -1,6 +1,10 @@
 const { operatorMap, numberOperators } = require("./constants");
 const { convertGraphQLToFQL, getBaseQuery } = require("./graphqlToFQLConverter");
-const { capitalizeFirstLetter, removeQuotes, checkBool } = require("./helper");
+const { capitalizeFirstLetter, removeQuotes, checkBool, getByValue } = require("./helper");
+
+let ruleMap = new Map();
+const factMap = new Map();
+const conditionMap = new Map();
 
 const requestBody = {
   "type": "Rule",
@@ -130,6 +134,18 @@ const optimizeRule = (data, simpleRule) => {
         : `\nlet var${index} = ${udfString}`;
       simpleRule = simpleRule.replaceAll(udfString, `var${index}`);
       map.set(udfString, map.get(udfString) + 1);
+
+      // Create variable name
+      const udfSplit = udfString.split('.');
+
+      let searchParam = udfSplit[udfSplit.length -1];
+      searchParam = searchParam.split('==');
+      searchParam = capitalizeFirstLetter(searchParam[0]);
+
+      let variableName = `${udfSplit[0]}By${searchParam}`;
+
+      ruleMap.set(variableName, udfString);
+
       index++;
     }
   }
@@ -146,13 +162,15 @@ const buildRule = () => {
     case "rule":
       const simpleRule = buildCompositeRule(requestBody);
       const optimizedRule = optimizeRule(requestBody, simpleRule);
-      console.log(optimizedRule)
       break;
     case "condition":
       const factAndCondition = buildFactAndCondition(requestBody);
-      console.log(factAndCondition)
       break;
   }
+
+  console.log(ruleMap)
+  console.log(factMap)
+  console.log(conditionMap)
 }
 
 const buildFactAndCondition = (data) => {
@@ -182,15 +200,47 @@ const buildFactAndCondition = (data) => {
 
   const condition = `let ${conditionName} = ${factName}() ${operatorString} ${targetString}`;
 
-  const factMap = new Map();
-  const conditionMap = new Map();
   factMap.set(factName, fact)
   conditionMap.set(conditionName, condition);
 
   return {
-    facts: factMap,
-    conditions: conditionMap
+    factMap,
+    conditionMap
   };
+}
+
+const optimizedFact = () => {
+
+  const udf = 'let factUserNationality = user.all.firstWhere(.id == "ckadqdbhk00go0148zzxh4bbq").nationality' // Try edit me
+  const map = new Map()
+  map.set('userById', 'user.all.firstWhere(.id == "ckadqdbhk00go0148zzxh4bbq")')
+
+  // 1. step to get search param
+  let temp;
+  let queryString;
+
+  temp = udf.split('.');
+  const factParam = temp[temp.length-1]
+  console.log('fact Param: ' + factParam)
+  temp.pop();
+
+  queryString = temp.join(".");
+
+// 2. step
+  temp = queryString.split(' = ');
+  console.log('query String: ' + temp[1])
+  const searchParam = temp[1]
+  temp.pop();
+
+  const searchVariable = getByValue(map, searchParam)
+  console.log(searchVariable)
+
+  queryString = `${temp} = ${searchVariable}().${factParam}`;
+
+// Log to console
+  console.log(queryString)
+
+  // return optimizedFact;
 }
 
 const getCorrectOperator = (operator) => {
@@ -239,4 +289,4 @@ const buildCompositeRule = (data) => {
   return `${ruleString}`;
 }
 
-buildRule();
+optimizedFact();
