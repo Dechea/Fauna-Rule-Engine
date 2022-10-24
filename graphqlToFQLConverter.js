@@ -1,8 +1,5 @@
 const { parse } = require('graphql/language/parser');
-
-const capitalizeFirstLetter = (string) => {
-  return string.charAt(0).toUpperCase() + string.slice(1);
-}
+const { capitalizeFirstLetter } = require("./helper");
 
 const composeOperator = (stringArray) => {
   let result = stringArray[1];

@@ -1,5 +1,6 @@
 const { operatorMap, numberOperators } = require("./constants");
 const { convertGraphQLToFQL, getBaseQuery } = require("./graphqlToFQLConverter");
+const { capitalizeFirstLetter, removeQuotes, checkBool } = require("./helper");
 
 const requestBody = {
   "type": "Rule",
@@ -119,11 +120,12 @@ const optimizeRule = (data, simpleRule) => {
 
   for (const query of queries) {
     const udfString = getBaseQuery(query);
+
     if (!map.has(udfString)) {
       map.set(udfString, 1);
     }
-    else if (map.get(udfString) == 1) {
-      varsString += varsString == ''
+    else if (map.get(udfString) === 1) {
+      varsString += varsString === ''
         ? `let var${index} = ${udfString}`
         : `\nlet var${index} = ${udfString}`;
       simpleRule = simpleRule.replaceAll(udfString, `var${index}`);
@@ -132,7 +134,10 @@ const optimizeRule = (data, simpleRule) => {
     }
   }
 
-  return `${varsString}\n${simpleRule}`;
+  return {
+    optimizedRules: map,
+    simpleRule
+  };
 }
 
 const buildRule = () => {
@@ -141,24 +146,51 @@ const buildRule = () => {
     case "rule":
       const simpleRule = buildCompositeRule(requestBody);
       const optimizedRule = optimizeRule(requestBody, simpleRule);
-      console.log(optimizedRule);
+      console.log(optimizedRule)
       break;
     case "condition":
-      const condition = buildCondition(requestBody);
-      console.log(condition);
+      const factAndCondition = buildFactAndCondition(requestBody);
+      console.log(factAndCondition)
       break;
   }
 }
 
-const buildCondition = (data) => {
+const buildFactAndCondition = (data) => {
   const { source, comparator, target } = data;
+
   const sourceString = convertGraphQLToFQL(source.value);
   const operatorString = getCorrectOperator(comparator);
   const targetString = getTargetString(operatorString, target);
 
-  return numberOperators.includes(operatorString)
-    ? `${sourceString} ${operatorString} ${targetString}`
-    : `${sourceString}.${operatorString}${targetString}`;
+  let factName = sourceString.split('.');
+  const collection = capitalizeFirstLetter(factName[0]);
+  const sourceType = capitalizeFirstLetter(factName[factName.length-1]);
+
+  factName = `fact${collection}${sourceType}`;
+  const fact = `let ${factName} = ${sourceString}`;
+
+  const formattedComparator = capitalizeFirstLetter(comparator);
+  const formattedTarget = capitalizeFirstLetter(removeQuotes(targetString));
+
+  let conditionName;
+
+  if(checkBool(target)) {
+    conditionName = target.value ? `conditionHas${sourceType}` : `conditionHasNo${sourceType}`;
+  } else {
+    conditionName = `condition${sourceType}${formattedComparator}${formattedTarget}`;
+  }
+
+  const condition = `let ${conditionName} = ${factName}() ${operatorString} ${targetString}`;
+
+  const factMap = new Map();
+  const conditionMap = new Map();
+  factMap.set(factName, fact)
+  conditionMap.set(conditionName, condition);
+
+  return {
+    facts: factMap,
+    conditions: conditionMap
+  };
 }
 
 const getCorrectOperator = (operator) => {
@@ -187,7 +219,7 @@ const buildNestedConditions = (data, operator) => {
     else if (anyInner)
       ruleString += `(${buildCompositeRule(data[index])})`;
     else
-      ruleString += `${buildCondition(data[index])}`;
+      ruleString += `${buildFactAndCondition(data[index])}`;
 
     if (index != data.length - 1)
       ruleString += ` ${operator} `;
