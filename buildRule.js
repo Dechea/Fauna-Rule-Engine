@@ -1,24 +1,17 @@
 const flatten = require('flat');
 
-const { operatorMap, numberOperators } = require("./constants");
-const { convertGraphQLToFQL, getBaseQuery } = require("./graphqlToFQLConverter");
-const { capitalizeFirstLetter, removeQuotes, checkBool, getByValue } = require("./helper");
+const { operatorMap } = require("./constants");
+const { convertGraphQLToFQL } = require("./graphqlToFQLConverter");
+const { capitalizeFirstLetter, removeQuotes, checkBool, getByValue, isNumeric} = require("./helper");
 
 let objectMap = new Map();
 const factMap = new Map();
-let optimizedFactMap = new Map();
 const conditionMap = new Map();
+const existingVariablesMap = new Map();
 
 const topLevel = new Map();
-const midLevel = new Map();
-const lowerLevel = new Map();
 
 const functionCall = ' => ';
-
-
-const fMap = new Map();
-const anyMap = new Map();
-const allMap = new Map();
 
 const requestBody = {
   "type": "Rule",
@@ -90,7 +83,7 @@ const requestBody = {
               "source": {
                 "type": "Fact",
                 "name": "job",
-                "value": 'query User {user(where: {id: "ckadqdbhk00go0148zzxh4bbq"}) {job}}'
+                "value": 'query User {user(where: {id: $id}) {job}}'
               },
               "comparator": "eq",
               "target": {
@@ -125,180 +118,6 @@ const getQueries = (data, queries) => {
   }
 }
 
-// const optimize = (simpleRule) => {
-//   return JSON.stringify(simpleRule.split('&&'))
-// }
-
-/* Optimizing performance and cost of rule by finding duplicated code */
-const optimizeRule = (data, simpleRule) => {
-  const { all, any } = data;
-  const queries = [];
-  getQueries(all, queries);
-  getQueries(any, queries);
-
-  const map = new Map();
-  let varsString = '';
-  let index = 0;
-
-  for (const query of queries) {
-    const udfString = getBaseQuery(query);
-    if (!map.has(udfString)) {
-      map.set(udfString, 1);
-    }
-    else if (map.get(udfString) === 1) {
-      varsString += varsString === ''
-        ? `let var${index} = ${udfString}`
-        : `\nlet var${index} = ${udfString}`;
-
-      simpleRule = simpleRule.replaceAll(udfString, `var${index}`);
-      map.set(udfString, map.get(udfString) + 1);
-
-      // Create variable name
-      const udfSplit = udfString.split('.');
-
-      let searchParam = udfSplit[udfSplit.length -1];
-      searchParam = searchParam.split('==');
-      searchParam = capitalizeFirstLetter(searchParam[0]);
-
-      let variableName = `${udfSplit[0]}By${searchParam}`;
-      variableName = variableName.replace(/ /g, '');
-
-      objectMap.set(variableName, udfString);
-
-      index++;
-    }
-  }
-
-  return {
-    optimizedRules: map,
-    simpleRule
-  };
-}
-
-const buildRule = () => {
-  const { type, all, any } = requestBody;
-  let simpleRule;
-
-  switch (type.toLowerCase()) {
-    case "rule":
-      simpleRule = buildCompositeRule(requestBody);
-      optimizeRule(requestBody, simpleRule);
-      break;
-    case "condition":
-      buildFactAndCondition(requestBody);
-      break;
-  }
-
-  objectMap.forEach((value, key) => {
-    const object = {key, value};
-    factMap.forEach((value, key) => {
-      const fact = {key, value};
-      optimizeFact(object, fact);
-    });
-  });
-
-  console.log(objectMap);
-  console.log(optimizedFactMap);
-  console.log(conditionMap);
-
-  // console.log( fMap )
-  // console.log( anyMap )
-  // console.log( allMap )
-
-  // objectMap.forEach((value, key) => {
-  //   console.log(createFunction(key, value))
-  // });
-  // optimizedFactMap.forEach((value, key) => {
-  //   console.log(createFunction(key, value))
-  // });
-  // conditionMap.forEach((value, key) => {
-  //   console.log(createFunction(key, value))
-  // });
-}
-
-const buildFactAndCondition = (data) => {
-  const { source, comparator, target } = data;
-
-  const sourceString = convertGraphQLToFQL(source.value);
-  const operatorString = getCorrectOperator(comparator);
-  const targetString = getTargetString(operatorString, target);
-
-  let factName = sourceString.split('.');
-  const collection = capitalizeFirstLetter(factName[0]);
-  const sourceType = capitalizeFirstLetter(factName[factName.length-1]);
-
-  factName = `fact${collection}${sourceType}`;
-  const fact = `()${functionCall}${sourceString}`;
-
-  const formattedComparator = capitalizeFirstLetter(comparator);
-  const formattedTarget = capitalizeFirstLetter(removeQuotes(targetString));
-
-  let conditionName;
-
-  if (checkBool(target)) {
-    conditionName = target.value ? `condition${collection}Has${sourceType}` : `condition${collection}HasNo${sourceType}`;
-  } else {
-    conditionName = `condition${collection}${sourceType}${formattedComparator}${formattedTarget}`;
-  }
-
-  const condition = `()${functionCall}${factName}() ${operatorString} ${targetString}`;
-
-  factMap.set(factName, fact)
-  conditionMap.set(conditionName, condition);
-
-  return {
-    factMap,
-    conditionMap
-  };
-}
-
-const optimizeFact = (object, fact) => {
-
-  // split object and fact in key value
-  const factName = fact.key;
-  const factValue = fact.value;
-
-  // create map to check object value
-  const map = new Map();
-  map.set(object.key, object.value)
-
-  // 1. step
-  // extract the search path
-  // remove fact
-  let temp;
-  let queryString;
-
-  temp = factValue.split('.');
-  const factParam = temp[temp.length-1]
-  temp.pop();
-
-  queryString = temp.join(".");
-
-  // 2. step
-  // get search param from variable
-  // set variable in fact
-  temp = queryString.split(functionCall);
-  const searchParam = temp[1]
-  temp.pop();
-
-  const searchVariable = getByValue(map, searchParam)
-  if (searchVariable !== undefined) {
-    // Optimized fact
-    // remove space
-    queryString = `${temp}${functionCall}${searchVariable}().${factParam}`;
-
-    optimizedFactMap.set(factName, queryString);
-  }
-
-}
-
-const createFunction = (functionName, functionBody) => {
-  return `Function.create({
-    name: '${functionName}',
-    body: '${functionBody}'
-  })`
-}
-
 const getCorrectOperator = (operator) => {
   return operatorMap[operator.toLowerCase()] || operator;
 }
@@ -316,61 +135,7 @@ const getTargetString = (operatorString, target) => {
   return value;
 }
 
-
-const buildNestedConditions = (data, operator) => {
-  let ruleString = '';
-  for (let index = 0; index < data.length; index++) {
-    const { all: allInner, any: anyInner } = data[index];
-    if (allInner) {
-      const allInnerEntry = data[index];
-      ruleString += buildCompositeRule(allInnerEntry);
-
-      allMap.set(allInnerEntry.name, allInnerEntry)
-
-      lowerLevel.set('all', allInnerEntry);
-    } else if (anyInner) {
-      const anyInnerEntry = data[index];
-      ruleString += buildCompositeRule(anyInnerEntry);
-
-      anyMap.set(anyInnerEntry.name, anyInnerEntry)
-
-      lowerLevel.set('any', anyInnerEntry);
-    } else {
-      const factInnerEntry = data[index];
-      ruleString += buildFactAndCondition(factInnerEntry);
-
-      fMap.set(factInnerEntry.name, factInnerEntry)
-
-      lowerLevel.set('fact', factInnerEntry);
-    }
-
-    if (index !== data.length - 1)
-      ruleString += ` ${operator} `;
-  }
-  return ruleString;
-}
-
-const buildCompositeRule = (data) => {
-  const { all, any } = data;
-
-  let ruleString = '';
-  if (all) {
-    const allEntry = buildNestedConditions(all, '&&');
-    ruleString += allEntry;
-
-    topLevel.set('all', allEntry)
-  } else if (any) {
-    const anyEntry = buildNestedConditions(any, '||');
-    ruleString += anyEntry;
-
-    topLevel.set('any', anyEntry);
-  }
-
-  return ruleString;
-}
-
-
-function createMapFromJson(obj){
+const buildRule = (obj) => {
 
   if (typeof obj !== "object" || obj === null) {
     return 0;
@@ -383,23 +148,24 @@ function createMapFromJson(obj){
   const map = new Map(Object.entries(flat));
   createObjectMap(map)
 
-  console.log(topLevel)
+  // console.log(topLevel)
 
-  const searchParam = 'all.1.any.0'
+  transformMap(topLevel)
+
+
+  // const searchParam = 'all.1.any.0'
   // const searchParam = 'all.0'
 
-  const source = topLevel.get(searchParam).get(`${searchParam}.source`)
-  const comparator = topLevel.get(searchParam).get(`${searchParam}.comparator`)
-  const target = topLevel.get(searchParam).get(`${searchParam}.target`)
-  // const source = topLevel.get('all.0').get('all.0.source')
-  // const comparator = topLevel.get('all.0').get('all.0.comparator')
-  // const target = topLevel.get('all.0').get('all.0.target')
+  // const source = topLevel.get(searchParam).get(`${searchParam}.source`)
+  // const comparator = topLevel.get(searchParam).get(`${searchParam}.comparator`)
+  // const target = topLevel.get(searchParam).get(`${searchParam}.target`)
 
   // console.log(source)
   // console.log(c)
   // console.log()
   //
-  buildParts(source, comparator, target)
+  // buildParts(source, comparator, target)
+
 
   // const ruleName = `${flat.type}${capitalizeFirstLetter(flat.name)}`
   // const map = new Map();
@@ -410,90 +176,38 @@ function createMapFromJson(obj){
 
 }
 
-function isNumeric(value) {
-  return /^\d+$/.test(value);
-}
+const transformMap = (inputMap) => {
 
-const buildParts = (source, comparator, target) => {
+  const operatorMap = new Map([['all', '&&'], ['any', '||']]);
+  const openBracket = '(';
+  const closeBracket = ')';
+  let searchParam;
+  const [firstKey] = inputMap.keys();
+  let oldKey = firstKey;
 
-  const comparatorString = comparator.comparator;
-
-  const sourceString = convertGraphQLToFQL(source.value);
-  const operatorString = getCorrectOperator(comparatorString);
-  const targetString = getTargetString(operatorString, target);
-
-  // Create function name - Object
-  const udfSplit = sourceString.split('.');
-  udfSplit.pop()
-  let object = udfSplit.join('.');
-
-  let searchParamSplit = object.split('(');
-  searchParamSplit = searchParamSplit.at(searchParamSplit.length - 1).split(' ');
-
-  const searchParams = []
-  const variableNames = []
-  searchParamSplit.forEach(searchParamPart => {
-    if(searchParamPart.includes('.')) {
-      searchParams.push(capitalizeFirstLetter(searchParamPart.substring(1)));
-    } else if (searchParamPart.includes('&&')) {
-      searchParams.push('And');
-    } else if (searchParamPart.includes('$')) {
-      let tempName = searchParamPart.replace('$', '')
-      tempName = tempName.replace(')', '')
-      variableNames.push(tempName)
+  inputMap.forEach((value, key) => {
+    // if (key.startsWith('all')) {
+    //   console.log('all')
+    // } else {
+    //   console.log('any')
+    // }
+    if(key.length === oldKey.length) {
+      console.log('same lvl')
+    } else {
+      console.log('new lvl')
     }
+
+    searchParam = key;
+    console.log(searchParam)
+
+    const source = topLevel.get(searchParam).get(`${searchParam}.source`)
+    const comparator = topLevel.get(searchParam).get(`${searchParam}.comparator`)
+    const target = topLevel.get(searchParam).get(`${searchParam}.target`)
+
+    buildParts(source, comparator, target)
+    oldKey = key;
   })
 
-  let objectName = `${udfSplit[0]}By${searchParams.join('')}`;
-  objectName = objectName.replace(/ /g, '');
-
-  // Create function names - Fact
-  let factName = sourceString.split('.');
-  const collection = capitalizeFirstLetter(factName[0]);
-  const sourceType = capitalizeFirstLetter(factName[factName.length-1]);
-  factName = `fact${collection}${sourceType}`;
-
-  // Create function names - Condition
-  const formattedComparator = capitalizeFirstLetter(comparatorString);
-  const formattedTarget = capitalizeFirstLetter(removeQuotes(targetString));
-
-  let conditionName;
-  if (checkBool(target)) {
-    conditionName = target.value ? `condition${collection}Has${sourceType}` : `condition${collection}HasNo${sourceType}`;
-  } else {
-    conditionName = `condition${collection}${sourceType}${formattedComparator}${formattedTarget}`;
-  }
-
-  let fact;
-  let condition;
-
-  // Check for variable usage in gql query
-  let factValue = sourceString.split('.')
-  factValue = factValue[factValue.length-1]
-
-  if (variableNames.length === 0) {
-    object = `()${functionCall}${object}`;
-    fact = `()${functionCall}${objectName}().${factValue}`;
-    condition = `()${functionCall}${factName}() ${operatorString} ${targetString}`;
-
-  } else {
-    const updatedVariableName = variableNames.join(',');
-    const updatedObject = object.replaceAll('$', '')
-
-    object = `(${updatedVariableName})${functionCall}${updatedObject}`;
-    fact = `(${updatedVariableName})${functionCall}${objectName}(${updatedVariableName}).${factValue}`;
-    condition = `(${updatedVariableName})${functionCall}${factName}(${updatedVariableName}) ${operatorString} ${targetString}`;
-  }
-
-  objectMap.set(objectName, object);
-  factMap.set(factName, fact)
-  conditionMap.set(conditionName, condition);
-
-  return {
-    objectMap,
-    factMap,
-    conditionMap
-  };
 }
 
 const createObjectMap = (data) => {
@@ -545,10 +259,105 @@ const createObjectMap = (data) => {
     // necessary for usage of old/new map
     oldName = updatedName !== '' || updatedName !== undefined ? updatedName : oldName;
   }
-
 }
 
-createMapFromJson(requestBody)
+const buildParts = (source, comparator, target) => {
 
-// buildRule();
+  const comparatorString = comparator.comparator;
+
+  const sourceString = convertGraphQLToFQL(source.value);
+  const operatorString = getCorrectOperator(comparatorString);
+  const targetString = getTargetString(operatorString, target);
+
+  // Create function name - Object
+  const udfSplit = sourceString.split('.');
+  udfSplit.pop()
+  let object = udfSplit.join('.');
+
+  let searchParamSplit = object.split('(');
+  searchParamSplit = searchParamSplit.at(searchParamSplit.length - 1).split(' ');
+
+  const searchParams = []
+  const variableNames = []
+  searchParamSplit.forEach(searchParamPart => {
+    if(searchParamPart.includes('.')) {
+      searchParams.push(capitalizeFirstLetter(searchParamPart.substring(1)));
+    } else if (searchParamPart.includes('&&')) {
+      searchParams.push('And');
+    } else if (searchParamPart.includes('$')) {
+      let tempName = searchParamPart.replace('$', '');
+      tempName = tempName.replace(')', '');
+      variableNames.push(tempName);
+    }
+  })
+
+  let objectName = `${udfSplit[0]}By${searchParams.join('')}`;
+  objectName = objectName.replace(/ /g, '');
+
+  // Create function names - Fact
+  let factName = sourceString.split('.');
+  const collection = capitalizeFirstLetter(factName[0]);
+  const sourceType = capitalizeFirstLetter(factName[factName.length-1]);
+  factName = `fact${collection}${sourceType}`;
+
+  // Create function names - Condition
+  const formattedComparator = capitalizeFirstLetter(comparatorString);
+  const formattedTarget = capitalizeFirstLetter(removeQuotes(targetString));
+
+  let conditionName;
+  if (checkBool(target)) {
+    conditionName = target.value ? `condition${collection}Has${sourceType}` : `condition${collection}HasNo${sourceType}`;
+  } else {
+    conditionName = `condition${collection}${sourceType}${formattedComparator}${formattedTarget}`;
+  }
+
+  let fact;
+  let condition;
+
+  // Check for variable usage in gql query
+  let factValue = sourceString.split('.')
+  factValue = factValue[factValue.length-1]
+
+  if (variableNames.length === 0) {
+    object = `()${functionCall}${object}`;
+    fact = `()${functionCall}${objectName}().${factValue}`;
+    condition = `()${functionCall}${factName}() ${operatorString} ${targetString}`;
+
+  } else {
+    const updatedVariableName = variableNames.join(',');
+    const updatedObject = object.replaceAll('$', '')
+
+    object = `(${updatedVariableName})${functionCall}${updatedObject}`;
+    fact = `(${updatedVariableName})${functionCall}${objectName}(${updatedVariableName}).${factValue}`;
+    condition = `(${updatedVariableName})${functionCall}${factName}(${updatedVariableName}) ${operatorString} ${targetString}`;
+
+    // push only if it's a variable
+    existingVariablesMap.set(objectName, object);
+  }
+
+  if(existingVariablesMap.has(objectName)) {
+    objectMap.set(objectName, existingVariablesMap.get(objectName));
+
+  } else {
+    objectMap.set(objectName, object);
+
+  }
+  factMap.set(factName, fact)
+  conditionMap.set(conditionName, condition);
+
+  return {
+    objectMap,
+    factMap,
+    conditionMap
+  };
+}
+
+const createFunction = (functionName, functionBody) => {
+  return `Function.create({
+    name: '${functionName}',
+    body: '${functionBody}'
+  })`
+}
+
+buildRule(requestBody)
 

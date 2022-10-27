@@ -30,9 +30,14 @@ const getByValue = (map, searchValue) => {
 	}
 }
 
+const isNumeric = (value) => {
+	return /^\d+$/.test(value);
+}
+
 module.exports = {
 	capitalizeFirstLetter,
 	removeQuotes,
 	checkBool,
-	getByValue
+	getByValue,
+	isNumeric
 }
