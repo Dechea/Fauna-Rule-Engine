@@ -20,17 +20,27 @@ const buildCriteriaString = (fields) => {
     const splittedString = fields[index].name.value.split("_");
     const key = splittedString[0];
     if (splittedString.length === 1) {
-      const value = fields[index].value.value;
-      criteriaString += `.${key} == "${value}"`;
+      let value;
+      if (fields[index].value.kind === 'Variable') {
+        value = fields[index].value.name.value;
+        criteriaString += `.${key} == $${value}`;
+      } else {
+        value = fields[index].value.value;
+        criteriaString += `.${key} == "${value}"`;
+      }
+      // const value = fields[index].value.value;
+
     }
     else {
-      const operator = composeOperator(splittedString); 
+      const operator = composeOperator(splittedString);
       const value = fields[index].value.value;
 
       criteriaString += `.${key}.${operator}("${value}")`;
     }
     criteriaString += index < fields.length - 1 ? ' && ' : '';
   }
+
+
   return criteriaString;
 }
 

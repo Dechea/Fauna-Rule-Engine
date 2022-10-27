@@ -46,7 +46,7 @@ const requestBody = {
           "source": {
             "type": "Fact",
             "name": "income",
-            "value": 'query User {posts(where: {id: "ckadqdbhk00go0148zzxh4bbq", name: "Micha"}) {income}}'
+            "value": 'query User {posts(where: {id: $id, name: $name}) {income}}'
           },
           "comparator": "gt",
           "target": {
@@ -235,7 +235,7 @@ const buildFactAndCondition = (data) => {
 
   let conditionName;
 
-  if(checkBool(target)) {
+  if (checkBool(target)) {
     conditionName = target.value ? `condition${collection}Has${sourceType}` : `condition${collection}HasNo${sourceType}`;
   } else {
     conditionName = `condition${collection}${sourceType}${formattedComparator}${formattedTarget}`;
@@ -282,7 +282,7 @@ const optimizeFact = (object, fact) => {
   temp.pop();
 
   const searchVariable = getByValue(map, searchParam)
-  if(searchVariable !== undefined) {
+  if (searchVariable !== undefined) {
     // Optimized fact
     // remove space
     queryString = `${temp}${functionCall}${searchVariable}().${factParam}`;
@@ -370,7 +370,7 @@ const buildCompositeRule = (data) => {
 }
 
 
-function flattenJSON(obj){
+function createMapFromJson(obj){
 
   if (typeof obj !== "object" || obj === null) {
     return 0;
@@ -381,12 +381,32 @@ function flattenJSON(obj){
   // console.log(flat)
 
   const map = new Map(Object.entries(flat));
-  iterateMap(map)
+  createObjectMap(map)
 
   console.log(topLevel)
 
+  const searchParam = 'all.1.any.0'
+  // const searchParam = 'all.0'
+
+  const source = topLevel.get(searchParam).get(`${searchParam}.source`)
+  const comparator = topLevel.get(searchParam).get(`${searchParam}.comparator`)
+  const target = topLevel.get(searchParam).get(`${searchParam}.target`)
+  // const source = topLevel.get('all.0').get('all.0.source')
+  // const comparator = topLevel.get('all.0').get('all.0.comparator')
+  // const target = topLevel.get('all.0').get('all.0.target')
+
+  // console.log(source)
+  // console.log(c)
+  // console.log()
+  //
+  buildParts(source, comparator, target)
+
   // const ruleName = `${flat.type}${capitalizeFirstLetter(flat.name)}`
   // const map = new Map();
+
+  console.log(objectMap);
+  console.log(factMap);
+  console.log(conditionMap);
 
 }
 
@@ -394,10 +414,92 @@ function isNumeric(value) {
   return /^\d+$/.test(value);
 }
 
-const iterateMap = (data) => {
+const buildParts = (source, comparator, target) => {
+
+  const comparatorString = comparator.comparator;
+
+  const sourceString = convertGraphQLToFQL(source.value);
+  const operatorString = getCorrectOperator(comparatorString);
+  const targetString = getTargetString(operatorString, target);
+
+  // Create function name - Object
+  const udfSplit = sourceString.split('.');
+  udfSplit.pop()
+  let object = udfSplit.join('.');
+
+  let searchParamSplit = object.split('(');
+  searchParamSplit = searchParamSplit.at(searchParamSplit.length - 1).split(' ');
+
+  const searchParams = []
+  const variableNames = []
+  searchParamSplit.forEach(searchParamPart => {
+    if(searchParamPart.includes('.')) {
+      searchParams.push(capitalizeFirstLetter(searchParamPart.substring(1)));
+    } else if (searchParamPart.includes('&&')) {
+      searchParams.push('And');
+    } else if (searchParamPart.includes('$')) {
+      let tempName = searchParamPart.replace('$', '')
+      tempName = tempName.replace(')', '')
+      variableNames.push(tempName)
+    }
+  })
+
+  let objectName = `${udfSplit[0]}By${searchParams.join('')}`;
+  objectName = objectName.replace(/ /g, '');
+
+  // Create function names - Fact
+  let factName = sourceString.split('.');
+  const collection = capitalizeFirstLetter(factName[0]);
+  const sourceType = capitalizeFirstLetter(factName[factName.length-1]);
+  factName = `fact${collection}${sourceType}`;
+
+  // Create function names - Condition
+  const formattedComparator = capitalizeFirstLetter(comparatorString);
+  const formattedTarget = capitalizeFirstLetter(removeQuotes(targetString));
+
+  let conditionName;
+  if (checkBool(target)) {
+    conditionName = target.value ? `condition${collection}Has${sourceType}` : `condition${collection}HasNo${sourceType}`;
+  } else {
+    conditionName = `condition${collection}${sourceType}${formattedComparator}${formattedTarget}`;
+  }
+
+  let fact;
+  let condition;
+
+  // Check for variable usage in gql query
+  let factValue = sourceString.split('.')
+  factValue = factValue[factValue.length-1]
+
+  if (variableNames.length === 0) {
+    object = `()${functionCall}${object}`;
+    fact = `()${functionCall}${objectName}().${factValue}`;
+    condition = `()${functionCall}${factName}() ${operatorString} ${targetString}`;
+
+  } else {
+    const updatedVariableName = variableNames.join(',');
+    const updatedObject = object.replaceAll('$', '')
+
+    object = `(${updatedVariableName})${functionCall}${updatedObject}`;
+    fact = `(${updatedVariableName})${functionCall}${objectName}(${updatedVariableName}).${factValue}`;
+    condition = `(${updatedVariableName})${functionCall}${factName}(${updatedVariableName}) ${operatorString} ${targetString}`;
+  }
+
+  objectMap.set(objectName, object);
+  factMap.set(factName, fact)
+  conditionMap.set(conditionName, condition);
+
+  return {
+    objectMap,
+    factMap,
+    conditionMap
+  };
+}
+
+const createObjectMap = (data) => {
 
   let tempMidMap = new Map();
-  let tempLowerMap = new Map();
+  let tempLowerObject = {};
 
   let oldName = Array.from(data.keys())[2].split('.');
   oldName.pop();
@@ -413,19 +515,29 @@ const iterateMap = (data) => {
     const checkName = key.slice(0, updatedName.length)
     const valueName = key.slice(updatedName.length + 1, key.length)
 
-    if(updatedKey !== undefined) {
-      if(isNumeric(updatedKey)) {
-        if(checkName === updatedName) {
+    if (updatedKey !== undefined) {
+      if (isNumeric(updatedKey)) {
+        // Set subobjects to top lvl map
+        if (checkName === updatedName) {
           topLevel.set(updatedName, tempMidMap);
         }
+        // Set comparator map
+        if (valueName === 'comparator') {
+          // tempLowerObject = new Map([[valueName, value]])
+          tempLowerObject = {[valueName] : value};
+          tempMidMap.set(key, tempLowerObject);
+        }
       } else {
-        if(checkName === updatedName) {
-          if(oldName !== updatedName) {
-            tempLowerMap = new Map([[valueName, value]]);
-            tempMidMap.set(updatedName, tempLowerMap);
+        if (checkName === updatedName) {
+          // Set or updated submaps
+          if (oldName !== updatedName) {
+            // tempLowerObject = new Map([[valueName, value]]);
+            tempLowerObject = {[valueName] : value};
+            tempMidMap.set(updatedName, tempLowerObject);
           } else {
-            tempLowerMap.set(valueName, value);
-            tempMidMap = new Map([[updatedName, tempLowerMap]]);
+            // tempLowerObject.set(valueName, value);
+            tempLowerObject[valueName] = value;
+            tempMidMap = new Map([[updatedName, tempLowerObject]]);
           }
         }
       }
@@ -436,7 +548,7 @@ const iterateMap = (data) => {
 
 }
 
-flattenJSON(requestBody)
+createMapFromJson(requestBody)
 
 // buildRule();
 
