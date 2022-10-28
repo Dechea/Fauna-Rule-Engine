@@ -12,6 +12,33 @@ const existingVariablesMap = new Map();
 const topLevel = new Map();
 
 const functionCall = ' => ';
+const prefix = 'RE_';
+
+const requestBodyFact = {
+  "type": "Fact",
+  "name": "nationality",
+  "value": 'query User {author(where: {id: $id}) {nationality}}'
+}
+const requestBodyFact2 = {
+  "type": "Fact",
+  "name": "job",
+  "value": 'query User {posts(where: {id: "ckadqdbhk00go0148zzxh4bbq", name: "Micha", something: "bla"}) {job}}'
+}
+
+const requestBodyCondition = {
+  "type": "Condition",
+  "name": "isIncomeHigherThan2000",
+  "source": {
+    "type": "Fact",
+    "name": "income",
+    "value": 'query User {posts(where: {id: "ckadqdbhk00go0148zzxh4bbq", name: "Micha", something: "bla"}) {job}}'
+  },
+  "comparator": "gt",
+  "target": {
+    "type": "Number",
+    "value": 2000
+  }
+}
 
 const requestBody = {
   "type": "Rule",
@@ -135,6 +162,48 @@ const getTargetString = (operatorString, target) => {
   return value;
 }
 
+const build = (obj) => {
+
+  if (typeof obj !== "object" || obj === null) {
+    return 0;
+  }
+
+  const flatt = flatten(obj);
+
+  // console.log(flatt)
+
+  const flattMap = new Map(Object.entries(flatt));
+  const flattType = flatt.type;
+  const flattName = flatt.name;
+
+
+  switch (flattMap.get('type')) {
+    case 'Fact':
+      buildFact(obj)
+      break;
+    case 'Condition':
+      buildCondition(obj)
+      break;
+    case 'Rule':
+      buildRule(flattMap, flattType, flattName)
+      break;
+  }
+
+}
+const buildFact = (inputObject) => {
+
+  console.log(buildFactPart(inputObject))
+
+}
+
+const buildCondition = (inputObject) => {
+
+  const map = buildFactPart(inputObject.source)
+
+  console.log(buildConditionPart(map, inputObject))
+
+}
+
 const buildRule = (obj) => {
 
   if (typeof obj !== "object" || obj === null) {
@@ -170,6 +239,31 @@ const buildRule = (obj) => {
   })
 
 }
+//
+// const buildRule = (flattMap, flattType, flattName) => {
+//
+//   createObjectMap(flattMap, flattType, flattName)
+//
+//   const ruleName = `${flattType}${capitalizeFirstLetter(flattName)}`
+//   const ruleValue = createRule(topLevel)
+//   const ruleMap = new Map([[ruleName, ruleValue]]);
+//
+//   console.log(objectMap);
+//   console.log(factMap);
+//   console.log(conditionMap);
+//   console.log(ruleMap);
+//
+//   objectMap.forEach((value, key) =>{
+//     console.log(createFunction(key, value))
+//   })
+//   factMap.forEach((value, key) =>{
+//     console.log(createFunction(key, value))
+//   })
+//   ruleMap.forEach((value, key) =>{
+//     console.log(createFunction(key, value))
+//   })
+//
+// }
 
 const createRule = (inputMap) => {
   const openBracket = '(';
@@ -194,8 +288,6 @@ const createRule = (inputMap) => {
 
     const {conditionName, variableNames} = buildParts(source, comparator, target)
     allUsedVariables.add(variableNames);
-    // const usedVariables = condition.split(' => ')
-    // usedVariables.pop()
 
     // check for position
     if (key === oldKey && key.length === oldKey.length) {
@@ -298,6 +390,149 @@ const createObjectMap = (data) => {
   }
 }
 
+const buildFactPart = (source) => {
+
+  const sourceString = convertGraphQLToFQL(source.value);
+  const collection = sourceString.split('.')[0];
+
+  // Create function name - Object
+  const udfSplit = sourceString.split('.');
+  udfSplit.pop()
+  let object = udfSplit.join('.');
+
+  let searchParamSplit = object.split('(');
+  searchParamSplit = searchParamSplit.at(searchParamSplit.length - 1).split(' ');
+
+  const searchParams = [];
+  const variableNames = [];
+  const fixedValues = [];
+
+  searchParamSplit.forEach(searchParamPart => {
+    if(searchParamPart.includes('.')) {
+      searchParams.push(capitalizeFirstLetter(searchParamPart.substring(2)));
+    } else if (searchParamPart.includes('&&')) {
+      searchParams.push('And');
+    } else if (searchParamPart.includes('$')) {
+      let tempName = searchParamPart.replace('$', '');
+      tempName = tempName.replace(')', '');
+      tempName = `${collection}${capitalizeFirstLetter(tempName)}`;
+      variableNames.push(tempName);
+    } else if (searchParamPart.includes('"')) {
+      fixedValues.push(
+        searchParamPart.replaceAll('"', '').replaceAll(')', '')
+      );
+    }
+  })
+
+  let objectName = `${udfSplit[0]}By`;
+  let index = 0;
+  searchParams.forEach(param => {
+    objectName += param
+
+    // If gql contains fixed value
+    // Add dynamically the value to name
+    if(fixedValues.length > 0) {
+      if (index === 0) {
+        objectName += `-${fixedValues[index++]}`;
+      } else if (param !== 'And') {
+        objectName += `-${fixedValues[index++]}`;
+      }
+    }
+  })
+  objectName = objectName.replace(/ /g, '');
+
+  // Create function names - Fact
+  let factName = sourceString.split('.');
+  const collectionCapitalized = capitalizeFirstLetter(factName[0]);
+  const sourceType = capitalizeFirstLetter(factName[factName.length-1]);
+  factName = `fact${collectionCapitalized}${sourceType}`;
+
+  // Check for variable usage in gql query
+  let factValue = sourceString.split('.')
+  factValue = factValue[factValue.length-1]
+
+  let fact;
+
+  if (variableNames.size === 0) {
+    object = `()${functionCall}${object}`;
+    fact = `()${functionCall}${objectName}().${factValue}`;
+
+  } else {
+    const updatedVariableName = variableNames.join(',');
+    const updatedObject = object.replaceAll('$', '')
+
+    object = `(${updatedVariableName})${functionCall}${updatedObject}`;
+    fact = `(${updatedVariableName})${functionCall}${objectName}(${updatedVariableName}).${factValue}`;
+
+    // push only if it's a variable
+    existingVariablesMap.set(objectName, object);
+  }
+
+  const resultMap = new Map();
+  resultMap.set('object', {[objectName]: object})
+  resultMap.set('fact', {[factName]: fact})
+  resultMap.set('variable', variableNames);
+
+  return resultMap;
+
+}
+
+const buildConditionPart = (inputMap, inputObject) => {
+
+  const comparatorString = inputObject.comparator;
+  const source = inputObject.source;
+  const target = inputObject.target;
+
+  const operatorString = getCorrectOperator(comparatorString);
+  const targetString = getTargetString(operatorString, target);
+
+  const objectObject = inputMap.get('object');
+  let objectName = Object.keys(objectObject)[0];
+  let object = objectObject[objectName];
+
+  const factObject = inputMap.get('fact');
+  let factName = Object.keys(factObject)[0];
+  let factValue = factObject[factName];
+  const variableNames = inputMap.get('variable');
+
+  const collection = objectName.split('By')[0];
+  const collectionCapitalized = capitalizeFirstLetter(collection);
+  const sourceType = capitalizeFirstLetter(source.name);
+
+  // Create function names - Condition
+  const formattedComparator = capitalizeFirstLetter(comparatorString);
+  const formattedTarget = capitalizeFirstLetter(removeQuotes(targetString));
+
+  let conditionName;
+  if (checkBool(target)) {
+    conditionName = target.value ? `condition${collectionCapitalized}Has${sourceType}` : `condition${collectionCapitalized}HasNo${sourceType}`;
+  } else {
+    conditionName = `condition${collectionCapitalized}${sourceType}${formattedComparator}${formattedTarget}`;
+  }
+
+  let fact;
+  let condition;
+
+  if (variableNames.size === 0) {
+    condition = `()${functionCall}${factName}() ${operatorString} ${targetString}`;
+
+  } else {
+    const updatedVariableName = variableNames.join(',');
+
+    condition = `(${updatedVariableName})${functionCall}${factName}(${updatedVariableName}) ${operatorString} ${targetString}`;
+
+    // push only if it's a variable
+  }
+
+
+  const resultMap = new Map();
+  resultMap.set('object', {[objectName]: object})
+  resultMap.set('fact', {[factName]: factValue})
+  resultMap.set('condition', {[conditionName]: condition});
+
+  return resultMap;
+}
+
 const buildParts = (source, comparator, target) => {
 
   const comparatorString = comparator.comparator;
@@ -395,5 +630,8 @@ const createFunction = (functionName, functionBody) => {
   })`
 }
 
-buildRule(requestBody)
+// buildRule(requestBody)
+build(requestBodyFact)
+// build(requestBodyFact2)
+build(requestBodyCondition)
 
