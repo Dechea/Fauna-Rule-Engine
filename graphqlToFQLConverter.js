@@ -9,24 +9,29 @@ const composeOperator = (stringArray) => {
   return result;
 }
 
-const getCollectionSortCriteria = (arg) => {
+const getCollectionSortCriteria = (arg, collectionName) => {
   const [key, direction] = arg.value.value.split('_');
-  return `order(${direction.toLowerCase()}(.${key}))`;
+  return `order(${direction.toLowerCase()}(${collectionName} => ${collectionName}.${key}))`;
 }
 
-const buildCriteriaString = (fields) => {
+const buildCriteriaString = (fields, functionName) => {
   let criteriaString = '';
   for (let index = 0; index < fields.length; index++) {
     const splittedString = fields[index].name.value.split("_");
     const key = splittedString[0];
+
+    if(index == 0){
+      criteriaString += `${functionName} => `; 
+    }
+
     if (splittedString.length === 1) {
       let value;
       if (fields[index].value.kind === 'Variable') {
         value = fields[index].value.name.value;
-        criteriaString += `.${key} == $${value}`;
+        criteriaString += `${functionName}.${key} == $${value}`;
       } else {
         value = fields[index].value.value;
-        criteriaString += `.${key} == "${value}"`;
+        criteriaString += `${functionName}.${key} == "${value}"`;
       }
       // const value = fields[index].value.value;
 
@@ -35,7 +40,7 @@ const buildCriteriaString = (fields) => {
       const operator = composeOperator(splittedString);
       const value = fields[index].value.value;
 
-      criteriaString += `.${key}.${operator}("${value}")`;
+      criteriaString += `${functionName}.${key}.${operator}("${value}")`;
     }
     criteriaString += index < fields.length - 1 ? ' && ' : '';
   }
@@ -44,22 +49,22 @@ const buildCriteriaString = (fields) => {
   return criteriaString;
 }
 
-const getCollectionFilterCriteria = (arg) => {
+const getCollectionFilterCriteria = (arg, functionName) => {
   const { fields } = arg.value;
-  const criteriaString = buildCriteriaString(fields);
+  const criteriaString = buildCriteriaString(fields, functionName);
   return `firstWhere(${criteriaString})`;
 }
 
-const getCollectionLevelCriteria = (args) => {
+const getCollectionLevelCriteria = (args, collectionName) => {
   let sortCriteria = null;
   let filterCriteria = null;
   for (const arg of args) {
     const keyword = arg.name.value;
     if (keyword === 'orderBy') {
-      sortCriteria = getCollectionSortCriteria(arg);
+      sortCriteria = getCollectionSortCriteria(arg, collectionName);
     }
     else if (keyword === 'where') {
-      filterCriteria = getCollectionFilterCriteria(arg);
+      filterCriteria = getCollectionFilterCriteria(arg, collectionName);
     }
   }
   return { sortCriteria, filterCriteria };
@@ -67,7 +72,7 @@ const getCollectionLevelCriteria = (args) => {
 
 const buildArrayExpression = (name, args) => {
   const { fields } = args[0].value;
-  const criteriaString = buildCriteriaString(fields);
+  const criteriaString = buildCriteriaString(fields, name);
   return `${name}.filter(${criteriaString}).at(0)`;
 }
 
@@ -111,7 +116,7 @@ const getBaseQuery = (query) => {
   const args = selections.arguments;
 
   fqlString += `${collectionName}.all`;
-  const { sortCriteria, filterCriteria } = getCollectionLevelCriteria(args);
+  const { sortCriteria, filterCriteria } = getCollectionLevelCriteria(args, collectionName);
 
   fqlString += sortCriteria ? `.${sortCriteria}` : '';
   fqlString += filterCriteria ? `.${filterCriteria}` : '';
@@ -127,7 +132,7 @@ const convertGraphQLToFQL = (query) => {
   const args = selections.arguments;
 
   fqlString += `${collectionName}.all`;
-  const { sortCriteria, filterCriteria } = getCollectionLevelCriteria(args);
+  const { sortCriteria, filterCriteria } = getCollectionLevelCriteria(args, collectionName);
 
   fqlString += sortCriteria ? `.${sortCriteria}` : '';
   fqlString += filterCriteria ? `.${filterCriteria}` : '';
