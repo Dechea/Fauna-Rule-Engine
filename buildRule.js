@@ -150,64 +150,87 @@ const buildRule = (obj) => {
 
   // console.log(topLevel)
 
-  transformMap(topLevel)
-
-
-  // const searchParam = 'all.1.any.0'
-  // const searchParam = 'all.0'
-
-  // const source = topLevel.get(searchParam).get(`${searchParam}.source`)
-  // const comparator = topLevel.get(searchParam).get(`${searchParam}.comparator`)
-  // const target = topLevel.get(searchParam).get(`${searchParam}.target`)
-
-  // console.log(source)
-  // console.log(c)
-  // console.log()
-  //
-  // buildParts(source, comparator, target)
-
-
-  // const ruleName = `${flat.type}${capitalizeFirstLetter(flat.name)}`
-  // const map = new Map();
+  const ruleName = `${flat.type}${capitalizeFirstLetter(flat.name)}`
+  const ruleValue = createRule(topLevel)
+  const ruleMap = new Map([[ruleName, ruleValue]]);
 
   console.log(objectMap);
   console.log(factMap);
   console.log(conditionMap);
+  console.log(ruleMap);
 
 }
 
-const transformMap = (inputMap) => {
-
-  const operatorMap = new Map([['all', '&&'], ['any', '||']]);
+const createRule = (inputMap) => {
   const openBracket = '(';
   const closeBracket = ')';
-  let searchParam;
   const [firstKey] = inputMap.keys();
-  let oldKey = firstKey;
+  const [lastKey] = [...inputMap].at(-1)
 
+  let oldKey = firstKey;
+  let updatedKey = firstKey;
+  let ruleString;
+  let counterBrackets = 0;
+
+  ruleString = openBracket;
+  counterBrackets++;
   inputMap.forEach((value, key) => {
-    // if (key.startsWith('all')) {
-    //   console.log('all')
-    // } else {
-    //   console.log('any')
-    // }
-    if(key.length === oldKey.length) {
-      console.log('same lvl')
+
+    // create all udfs
+    const source = topLevel.get(key).get(`${key}.source`)
+    const comparator = topLevel.get(key).get(`${key}.comparator`)
+    const target = topLevel.get(key).get(`${key}.target`)
+
+    const conditionVariableName = buildParts(source, comparator, target)
+
+    // check for position
+    if (key === oldKey && key.length === oldKey.length) {
+      ruleString += `${conditionVariableName}()`;
+
+      if (updatedKey.startsWith('all')) {
+        ruleString += ' && '
+      } else {
+        ruleString += ' || '
+      }
     } else {
-      console.log('new lvl')
+      // get correct position from key
+      if (key.length !== oldKey.length) {
+        updatedKey = key.slice(oldKey.length + 1);
+      }
+
+      // add brackets and operator
+      // only if it's not the last key
+      if(key !== lastKey) {
+        ruleString += openBracket;
+        ruleString += `${conditionVariableName}()`;
+        counterBrackets++;
+
+        if (updatedKey.startsWith('all')) {
+          ruleString += ' && '
+        } else {
+          ruleString += ' || '
+        }
+      } else {
+        ruleString += `${conditionVariableName}()`;
+      }
     }
 
-    searchParam = key;
-    console.log(searchParam)
+    // console.log(key)
+    // console.log(oldKey)
+    // console.log(updatedKey)
+    // console.log(lastKey)
+    // console.log('----------------')
+    // console.log(ruleString)
+    // console.log('----------------')
 
-    const source = topLevel.get(searchParam).get(`${searchParam}.source`)
-    const comparator = topLevel.get(searchParam).get(`${searchParam}.comparator`)
-    const target = topLevel.get(searchParam).get(`${searchParam}.target`)
-
-    buildParts(source, comparator, target)
     oldKey = key;
   })
 
+  // add the correct amount of brackets
+  const brackets = closeBracket.repeat(counterBrackets);
+  ruleString += brackets
+
+  return ruleString
 }
 
 const createObjectMap = (data) => {
@@ -345,11 +368,7 @@ const buildParts = (source, comparator, target) => {
   factMap.set(factName, fact)
   conditionMap.set(conditionName, condition);
 
-  return {
-    objectMap,
-    factMap,
-    conditionMap
-  };
+  return conditionName;
 }
 
 const createFunction = (functionName, functionBody) => {
