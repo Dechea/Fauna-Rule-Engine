@@ -159,6 +159,16 @@ const buildRule = (obj) => {
   console.log(conditionMap);
   console.log(ruleMap);
 
+  objectMap.forEach((value, key) =>{
+    console.log(createFunction(key, value))
+  })
+  factMap.forEach((value, key) =>{
+    console.log(createFunction(key, value))
+  })
+  ruleMap.forEach((value, key) =>{
+    console.log(createFunction(key, value))
+  })
+
 }
 
 const createRule = (inputMap) => {
@@ -171,6 +181,7 @@ const createRule = (inputMap) => {
   let updatedKey = firstKey;
   let ruleString;
   let counterBrackets = 0;
+  let allUsedVariables = new Set();
 
   ruleString = openBracket;
   counterBrackets++;
@@ -181,11 +192,14 @@ const createRule = (inputMap) => {
     const comparator = topLevel.get(key).get(`${key}.comparator`)
     const target = topLevel.get(key).get(`${key}.target`)
 
-    const conditionVariableName = buildParts(source, comparator, target)
+    const {conditionName, variableNames} = buildParts(source, comparator, target)
+    allUsedVariables.add(variableNames);
+    // const usedVariables = condition.split(' => ')
+    // usedVariables.pop()
 
     // check for position
     if (key === oldKey && key.length === oldKey.length) {
-      ruleString += `${conditionVariableName}()`;
+      ruleString += `${conditionName}(${variableNames})`;
 
       if (updatedKey.startsWith('all')) {
         ruleString += ' && '
@@ -202,7 +216,7 @@ const createRule = (inputMap) => {
       // only if it's not the last key
       if(key !== lastKey) {
         ruleString += openBracket;
-        ruleString += `${conditionVariableName}()`;
+        ruleString += `${conditionName}(${variableNames})`;
         counterBrackets++;
 
         if (updatedKey.startsWith('all')) {
@@ -211,7 +225,7 @@ const createRule = (inputMap) => {
           ruleString += ' || '
         }
       } else {
-        ruleString += `${conditionVariableName}()`;
+        ruleString += `${conditionName}(${variableNames})`;
       }
     }
 
@@ -230,7 +244,7 @@ const createRule = (inputMap) => {
   const brackets = closeBracket.repeat(counterBrackets);
   ruleString += brackets
 
-  return ruleString
+  return `(${[...allUsedVariables].flat().join(',')})${functionCall}${ruleString}`
 }
 
 const createObjectMap = (data) => {
@@ -292,6 +306,8 @@ const buildParts = (source, comparator, target) => {
   const operatorString = getCorrectOperator(comparatorString);
   const targetString = getTargetString(operatorString, target);
 
+  const collection = sourceString.split('.')[0];
+
   // Create function name - Object
   const udfSplit = sourceString.split('.');
   udfSplit.pop()
@@ -301,7 +317,7 @@ const buildParts = (source, comparator, target) => {
   searchParamSplit = searchParamSplit.at(searchParamSplit.length - 1).split(' ');
 
   const searchParams = []
-  const variableNames = []
+  const variableNames = [];
   searchParamSplit.forEach(searchParamPart => {
     if(searchParamPart.includes('.')) {
       searchParams.push(capitalizeFirstLetter(searchParamPart.substring(1)));
@@ -310,6 +326,7 @@ const buildParts = (source, comparator, target) => {
     } else if (searchParamPart.includes('$')) {
       let tempName = searchParamPart.replace('$', '');
       tempName = tempName.replace(')', '');
+      tempName = `${collection}${capitalizeFirstLetter(tempName)}`;
       variableNames.push(tempName);
     }
   })
@@ -319,9 +336,9 @@ const buildParts = (source, comparator, target) => {
 
   // Create function names - Fact
   let factName = sourceString.split('.');
-  const collection = capitalizeFirstLetter(factName[0]);
+  const collectionCapitalized = capitalizeFirstLetter(factName[0]);
   const sourceType = capitalizeFirstLetter(factName[factName.length-1]);
-  factName = `fact${collection}${sourceType}`;
+  factName = `fact${collectionCapitalized}${sourceType}`;
 
   // Create function names - Condition
   const formattedComparator = capitalizeFirstLetter(comparatorString);
@@ -329,9 +346,9 @@ const buildParts = (source, comparator, target) => {
 
   let conditionName;
   if (checkBool(target)) {
-    conditionName = target.value ? `condition${collection}Has${sourceType}` : `condition${collection}HasNo${sourceType}`;
+    conditionName = target.value ? `condition${collectionCapitalized}Has${sourceType}` : `condition${collectionCapitalized}HasNo${sourceType}`;
   } else {
-    conditionName = `condition${collection}${sourceType}${formattedComparator}${formattedTarget}`;
+    conditionName = `condition${collectionCapitalized}${sourceType}${formattedComparator}${formattedTarget}`;
   }
 
   let fact;
@@ -341,7 +358,7 @@ const buildParts = (source, comparator, target) => {
   let factValue = sourceString.split('.')
   factValue = factValue[factValue.length-1]
 
-  if (variableNames.length === 0) {
+  if (variableNames.size === 0) {
     object = `()${functionCall}${object}`;
     fact = `()${functionCall}${objectName}().${factValue}`;
     condition = `()${functionCall}${factName}() ${operatorString} ${targetString}`;
@@ -368,7 +385,7 @@ const buildParts = (source, comparator, target) => {
   factMap.set(factName, fact)
   conditionMap.set(conditionName, condition);
 
-  return conditionName;
+  return { conditionName, condition, variableNames };
 }
 
 const createFunction = (functionName, functionBody) => {
