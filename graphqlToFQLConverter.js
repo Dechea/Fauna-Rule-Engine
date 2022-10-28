@@ -72,7 +72,7 @@ const getCollectionLevelCriteria = (args, collectionName) => {
 
 const buildArrayExpression = (name, args) => {
   const { fields } = args[0].value;
-  const criteriaString = buildCriteriaString(fields, name);
+  const criteriaString = buildCriteriaString(fields, name.charAt(0));
   return `${name}.filter(${criteriaString}).at(0)`;
 }
 
@@ -116,7 +116,7 @@ const getBaseQuery = (query) => {
   const args = selections.arguments;
 
   fqlString += `${collectionName}.all`;
-  const { sortCriteria, filterCriteria } = getCollectionLevelCriteria(args, collectionName);
+  const { sortCriteria, filterCriteria } = getCollectionLevelCriteria(args, collectionName.charAt(0));
 
   fqlString += sortCriteria ? `.${sortCriteria}` : '';
   fqlString += filterCriteria ? `.${filterCriteria}` : '';
@@ -132,7 +132,7 @@ const convertGraphQLToFQL = (query) => {
   const args = selections.arguments;
 
   fqlString += `${collectionName}.all`;
-  const { sortCriteria, filterCriteria } = getCollectionLevelCriteria(args, collectionName);
+  const { sortCriteria, filterCriteria } = getCollectionLevelCriteria(args, collectionName.charAt(0));
 
   fqlString += sortCriteria ? `.${sortCriteria}` : '';
   fqlString += filterCriteria ? `.${filterCriteria}` : '';
