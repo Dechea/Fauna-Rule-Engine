@@ -7,9 +7,14 @@ const operatorMap = {
 'lte' : '<='
 }
 
+const logicalOperatorMap = {
+  '&&' : ','
+}
+
 const numberOperators = ['==', '>', '>=', '<', '<='];
 
 module.exports = {
   operatorMap,
-  numberOperators
+  numberOperators,
+  logicalOperatorMap
 }

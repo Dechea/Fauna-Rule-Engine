@@ -94,19 +94,20 @@ const getLastExpression = (input, result) => {
 // TRP_TreatmentPlans.all.order(asc(.name)).firstWhere(.name.startsWith("Jamie"))
 //.treatments.filter(.title.startsWith("Union")).at(0).selectedItems
 
-const query = `
-query MyQuery {
-  TRP_TreatmentPlans(orderBy: name_ASC, where: {id: "ckadqdbhk00go0148zzxh4bbq", updatedAt: "", name_contains: ""}) {
-    treatments(where: {title_starts_with: "Union"}) {
-      selectedItems {
-        quantity {
-          items
-        }
-      }
-    }
-  }
-}  
-`;
+// const query = `
+// query MyQuery {
+//   TRP_TreatmentPlans(orderBy: name_ASC, where: {id: "ckadqdbhk00go0148zzxh4bbq", updatedAt: "", name_contains: ""}) {
+//     treatments(where: {title_starts_with: "Union"}) {
+//       selectedItems {
+//         quantity {
+//           items
+//         }
+//       }
+//     }
+//   }
+// }  
+// `;
+const query = `query User {user(where: {id: "ckadqdbhk00go0148zzxh4bbq", name_contains: "abc"}) {nationality}}`;
 
 const getBaseQuery = (query) => {
   let fqlString = '';
