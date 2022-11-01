@@ -3,13 +3,10 @@ const flatten = require('flat');
 const { operatorMap } = require("./constants");
 const { convertGraphQLToFQL } = require("./graphqlToFQLConverter");
 const { capitalizeFirstLetter, removeQuotes, checkBool, getByValue, isNumeric } = require("./helper");
+const {parse} = require("graphql/language");
 
 let objectMap = new Map();
-const factMap = new Map();
-const conditionMap = new Map();
 const existingVariablesMap = new Map();
-
-const topLevel = new Map();
 
 const functionCall = ' => ';
 const prefix = 'RE_';
@@ -24,7 +21,6 @@ const requestBodyFact2 = {
   "name": "job",
   "value": 'query User {posts(where: {id: "ckadqdbhk00go0148zzxh4bbq", name: "Micha", something: "bla"}) {job}}'
 }
-
 const requestBodyCondition = {
   "type": "Condition",
   "name": "isIncomeHigherThan2000",
@@ -39,7 +35,6 @@ const requestBodyCondition = {
     "value": 2000
   }
 }
-
 const requestBody = {
   "type": "Rule",
   "name": "isEligibleForCredit",
@@ -185,7 +180,7 @@ const build = (obj) => {
       buildCondition(obj)
       break;
     case 'Rule':
-      buildRule(flattMap, flattType, flattName)
+      buildRule(obj, flattMap, flattType, flattName)
       break;
   }
 
@@ -204,13 +199,13 @@ const buildCondition = (inputObject) => {
 
 }
 
-const buildRule = (flattMap, flattType, flattName) => {
+const buildRule = (inputObject, flattMap, flattType, flattName) => {
 
   const topLevelMap = createObjectMap(flattMap);
 
   console.log(topLevelMap)
 
-  const ruleValue = createRule(topLevelMap)
+  // const ruleValue = createRule(topLevelMap)
 
   // const factMap = buildFactPart(inputFact);
   //
@@ -254,23 +249,19 @@ const createRule = (inputMap) => {
   let counterBrackets = 0;
   let allUsedVariables = new Set();
 
+  let objectMap = new Map();
+  let factMap = new Map();
+  let conditionMap = new Map();
+
   ruleString = openBracket;
   counterBrackets++;
   inputMap.forEach((value, key) => {
 
-    console.log('some key')
-    console.log(topLevel.get(key).value)
+    // objectMap = v;
+    // factMap;
+    // conditionMap;
 
-    // create all udfs
-    const source = topLevel.get(key).get(`${key}.source`)
-    const comparator = topLevel.get(key).get(`${key}.comparator`)
-    const target = topLevel.get(key).get(`${key}.target`)
-
-
-
-    const {conditionName, variableNames} = buildParts(source, comparator, target)
-
-    allUsedVariables.add(variableNames);
+    // allUsedVariables.add(factMap.variable);
 
     // check for position
     if (key === oldKey && key.length === oldKey.length) {
@@ -326,7 +317,10 @@ const createObjectMap = (data) => {
 
   let topLevelMap = new Map();
   let tempMidMap = new Map();
-  let tempLowerObject = {};
+  let objectName;
+  let inputObject = {};
+  let factMap = new Map();
+  let conditionMap = new Map();
 
   let oldName = Array.from(data.keys())[2].split('.');
   oldName.pop();
@@ -339,35 +333,62 @@ const createObjectMap = (data) => {
     const updatedAmount = keys.length;
     const updatedKey = keys[updatedAmount-1];
     const updatedName = keys.join('.');
-    const checkName = key.slice(0, updatedName.length)
-    const valueName = key.slice(updatedName.length + 1, key.length)
+    const checkName = key.slice(0, updatedName.length);
+    const valueName = key.slice(updatedName.length + 1, key.length);
 
     if (updatedKey !== undefined) {
+      // Create object name
+      if(updatedKey === 'source') {
+        if (valueName === 'value') {
+          objectName = createObjectName(value);
+        }
+      //   inputObject.source = {
+      //     ...inputObject.source,
+      //     [valueName]: value
+      //   };
+      // } else if (updatedKey === 'target') {
+      //   inputObject.target = {
+      //     ...inputObject.target,
+      //     [valueName]: value
+      //   };
+      // } else if (valueName === 'comparator') {
+      //   inputObject = {
+      //     ...inputObject,
+      //     [valueName]: value
+      //   };
+      }
+
+      // if (
+      //   'source' in inputObject
+      //   && 'comparator' in inputObject
+      //   && inputObject.target?.value !== undefined
+      // ) {
+      //   factMap = buildFactPart(inputObject.source);
+      //   conditionMap = buildConditionPart(factMap, inputObject);
+      //   console.log(conditionMap)
+      // }
+
       if (isNumeric(updatedKey)) {
-        // Set subobjects to top lvl map
+        // Add object name to map
+        // So we can find and replace it later
         if (checkName === updatedName) {
-          topLevelMap.set(updatedName, tempMidMap);
-        }
-        // Set comparator map
-        if (valueName === 'comparator') {
-          // tempLowerObject = new Map([[valueName, value]])
-          tempLowerObject = {[valueName] : value};
-          tempMidMap.set(key, tempLowerObject);
-        }
-      } else {
-        if (checkName === updatedName) {
-          // Set or updated submaps
-          if (oldName !== updatedName) {
-            // tempLowerObject = new Map([[valueName, value]]);
-            tempLowerObject = {[valueName] : value};
-            tempMidMap.set(updatedName, tempLowerObject);
-          } else {
-            // tempLowerObject.set(valueName, value);
-            tempLowerObject[valueName] = value;
-            tempMidMap = new Map([[updatedName, tempLowerObject]]);
-          }
+          topLevelMap.set(updatedName, objectName);
         }
       }
+      // else {
+      //   if (checkName === updatedName) {
+      //     // Set or updated submaps
+      //     tempMidMap = new Map([[updatedName, conditionMap]]);
+      //
+      //     // if (oldName !== updatedName) {
+      //     //   // tempLowerObject = {[valueName] : value};
+      //     //   tempMidMap.set(updatedName, conditionMap);
+      //     // } else {
+      //     //   // tempLowerObject[valueName] = value;
+      //     //   tempMidMap = new Map([[updatedName, conditionMap]]);
+      //     // }
+      //   }
+      // }
     }
     // necessary for usage of old/new map
     oldName = updatedName !== '' || updatedName !== undefined ? updatedName : oldName;
@@ -375,8 +396,66 @@ const createObjectMap = (data) => {
 
   return topLevelMap;
 }
+//
+// const createObjectMap = (data) => {
+//
+//   let topLevelMap = new Map();
+//   let tempMidMap = new Map();
+//   let tempLowerObject = {};
+//
+//   let oldName = Array.from(data.keys())[2].split('.');
+//   oldName.pop();
+//   oldName = oldName.join('.');
+//
+//   for (const [key, value] of data.entries()) {
+//     const keys = key.split('.');
+//     keys.pop();
+//
+//     const updatedAmount = keys.length;
+//     const updatedKey = keys[updatedAmount-1];
+//     const updatedName = keys.join('.');
+//     const checkName = key.slice(0, updatedName.length)
+//     const valueName = key.slice(updatedName.length + 1, key.length)
+//
+//     if (updatedKey !== undefined) {
+//       if (isNumeric(updatedKey)) {
+//         // Set subobjects to top lvl map
+//         if (checkName === updatedName) {
+//           topLevelMap.set(updatedName, tempMidMap);
+//         }
+//         // Set comparator map
+//         if (valueName === 'comparator') {
+//           // tempLowerObject = new Map([[valueName, value]])
+//           tempLowerObject = {[valueName] : value};
+//           tempMidMap.set(key, tempLowerObject);
+//         }
+//       } else {
+//         if (checkName === updatedName) {
+//           // Set or updated submaps
+//           if (oldName !== updatedName) {
+//             // tempLowerObject = new Map([[valueName, value]]);
+//             tempLowerObject = {[valueName] : value};
+//             tempMidMap.set(updatedName, tempLowerObject);
+//           } else {
+//             // tempLowerObject.set(valueName, value);
+//             tempLowerObject[valueName] = value;
+//             tempMidMap = new Map([[updatedName, tempLowerObject]]);
+//           }
+//         }
+//       }
+//     }
+//     // necessary for usage of old/new map
+//     oldName = updatedName !== '' || updatedName !== undefined ? updatedName : oldName;
+//   }
+//
+//   return topLevelMap;
+// }
 
-function createObjectName(sourceString, collection) {
+function createObjectName(source) {
+
+  const sourceString = convertGraphQLToFQL(source);
+  const collection = sourceString.split('.')[0];
+
   // Create function name - Object
   const udfSplit = sourceString.split('.');
   udfSplit.pop()
@@ -426,11 +505,12 @@ function createObjectName(sourceString, collection) {
 }
 
 const buildFactPart = (source) => {
-
+  //
   const sourceString = convertGraphQLToFQL(source.value);
-  const collection = sourceString.split('.')[0];
+  // const collection = sourceString.split('.')[0];
 
-  let {object, variableNames, objectName} = createObjectName(sourceString, collection);
+  // let {object, variableNames, objectName} = createObjectName(source, collection);
+  let {object, variableNames, objectName} = createObjectName(source.value);
 
   // Create function names - Fact
   let factName = sourceString.split('.');
@@ -621,9 +701,8 @@ const createFunction = (functionName, functionBody) => {
   })`
 }
 
-buildRule(requestBody)
-// build(requestBody)
+// buildRule(requestBody)
+build(requestBody);
 // build(requestBodyFact)
 // build(requestBodyFact2)
 // build(requestBodyCondition)
-
