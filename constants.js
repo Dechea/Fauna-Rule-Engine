@@ -8,7 +8,8 @@ const operatorMap = {
 }
 
 const logicalOperatorMap = {
-  '&&' : ','
+  '&&' : ',',
+  '||' : ', or : {}',
 }
 
 const numberOperators = ['==', '>', '>=', '<', '<='];

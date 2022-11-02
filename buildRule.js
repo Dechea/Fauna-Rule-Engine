@@ -631,7 +631,7 @@ const createFunction = (functionName, functionBody) => {
 }
 
 // buildRule(requestBody)
-build(requestBodyFact)
-// build(requestBodyFact2)
-build(requestBodyCondition)
+// build(requestBodyFact)
+build(requestBodyFact2)
+// build(requestBodyCondition)
 
