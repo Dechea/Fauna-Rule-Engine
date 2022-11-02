@@ -122,9 +122,6 @@ const build = (obj) => {
   }
 
   const flatt = flatten(obj);
-
-  // console.log(flatt)
-
   const flattMap = new Map(Object.entries(flatt));
 
   switch (flattMap.get('type')) {
@@ -138,6 +135,17 @@ const build = (obj) => {
       buildRule(obj, flattMap)
       break;
   }
+
+  // TODO: create/update UDF from output
+  // objectMap.forEach((value, key) =>{
+  //   console.log(createFunction(key, value))
+  // })
+  // factMap.forEach((value, key) =>{
+  //   console.log(createFunction(key, value))
+  // })
+  // ruleMap.forEach((value, key) =>{
+  //   console.log(createFunction(key, value))
+  // })
 
 }
 const buildFact = (inputObject) => {
@@ -163,17 +171,6 @@ const buildRule = (inputObject, flattMap) => {
   const ruleValue = buildRulePart(topLevelMap, ruleName);
 
   console.log(ruleValue)
-
-  // objectMap.forEach((value, key) =>{
-  //   console.log(createFunction(key, value))
-  // })
-  // factMap.forEach((value, key) =>{
-  //   console.log(createFunction(key, value))
-  // })
-  // ruleMap.forEach((value, key) =>{
-  //   console.log(createFunction(key, value))
-  // })
-
 }
 
 build(requestBody);

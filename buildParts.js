@@ -50,7 +50,6 @@ const getTargetString = (operatorString, target) => {
 const createObjectMap = (data) => {
 
 	let topLevelMap = new Map();
-	let tempMidMap = new Map();
 	let objectName;
 	let inputObject = {};
 	let factMap = new Map();
@@ -178,9 +177,7 @@ function createObjectName(source) {
 const buildFactPart = (source) => {
 	//
 	const sourceString = convertGraphQLToFQL(source.value);
-	// const collection = sourceString.split('.')[0];
 
-	// let {object, variableNames, objectName} = createObjectName(source, collection);
 	let {object, variableNames, objectName} = createObjectName(source.value);
 
 	// Create function names - Fact
@@ -227,11 +224,9 @@ const buildConditionPart = (inputMap, inputObject) => {
 
 	const objectObject = inputMap.get('object');
 	let objectName = Object.keys(objectObject)[0];
-	let object = objectObject[objectName];
 
 	const factObject = inputMap.get('fact');
 	let factName = Object.keys(factObject)[0];
-	let factValue = factObject[factName];
 	const variableNames = inputMap.get('variable');
 
 	const collection = objectName.split('By')[0];
@@ -257,9 +252,6 @@ const buildConditionPart = (inputMap, inputObject) => {
 		condition = `(${updatedVariableName})${functionCall}${factName}(${updatedVariableName}) ${operatorString} ${targetString}`;
 	}
 
-	// const resultMap = new Map();
-	// resultMap.set('object', {[objectName]: object})
-	// resultMap.set('fact', {[factName]: factValue})
 	inputMap.set('condition', {[conditionName]: condition});
 
 	return inputMap;
@@ -297,7 +289,7 @@ const buildRulePart = (inputMap, ruleName) => {
 	inputMap.forEach((value, key) => {
 		allUsedVariables.add(value.get('variable'));
 
-		temp = Object.values(value.get('condition'));
+		temp = Object.keys(value.get('condition'));
 
 		// check for position
 		if (key === oldKey && key.length === oldKey.length) {
