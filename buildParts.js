@@ -94,6 +94,7 @@ const createObjectMap = (data) => {
 			// Check if the whole object is set
 			// To create the sub objects
 			// And set it to the correct place
+			// TODO add check for old value of source/target
 			if (
 				inputObject.source?.type !== undefined
 				&& inputObject.source?.name !== undefined
