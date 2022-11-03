@@ -14,12 +14,13 @@ const fql_number = `posts.all.firstWhere(p => p.income > 2000  && p.year == 2022
 // fact
 // const fql_complex_3 = `posts.all.firstWhere(p => p.id == $id || ( p.name == $name && ( p.something == "bla" && p.income > 2000 ) ) ).nationality`
 const fql_complex_3 = `posts.all.firstWhere(p => p.id == $id || ( p.name == $name && ( p.something == "bla" || ( p.income > 2000 && p.year == 2022 ) ) ) ).nationality == "DE"`
+const fql_fact = `posts.all.firstWhere(p => p.id == $id &&  p.name == $name).nationality == "DE"`
 const fql_fact_variable = '(postsId,postsName) => postsByIdAndName(postsId,postsName).income'
 
 // condition
 // const fact = new Map([[object, fact]]);
-const fql_boolean = '() => postsByIdAndName().job == true'
-const fql_condition_greater_than = '(postsId,postsName) => postsByIdAndName(postsId,postsName).income > 2000'
+const fql_condition_boolean = 'posts.all.firstWhere(p => p.id == $id &&  p.name == $name).job == true'
+const fql_condition_greater_than = 'posts.all.firstWhere(p => p.id == $id &&  p.name == $name).income > 2000'
 
 
 const convertMemberExpressionToString = (expression) => {
@@ -181,25 +182,96 @@ const convertObjectToString = (object) => {
   }
 }
 
+const convertBinaryExpressionToString = (object) => {
+  let result = '';
+  let baseString = '';
+  let leftString = '';
+  let rightString = '';
+
+  const operands = [];
+  operands.push(object.left);
+  operands.push(object.right);
+
+  let operator = object.operator;
+
+  if(operator === '==') {
+    operator = ':';
+  }
+
+  operands.forEach((operand, index) => {
+
+    const { type } = operand;
+    const { object, property } = operand;
+
+    switch (type) {
+      case 'MemberExpression':
+        baseString = convertObjectToString(object);
+        result =`${baseString} { ${property.name}`;
+        break;
+
+      case 'CallExpression':
+        baseString = convertCallExpressionToString(operand);
+        if (typeof property === 'undefined') {
+          result = `${baseString}`;
+        } else {
+          result = `${baseString} { ${property.name}`;
+        }
+        break;
+
+      case 'StringLiteral':
+        baseString = operand.value;
+        result = baseString;
+        break;
+
+      case 'BooleanLiteral':
+        baseString = operand.value;
+        result = baseString;
+        break;
+
+      case 'NumericLiteral':
+        baseString = operand.value;
+        result = baseString;
+        break;
+    }
+    if (index === 0) {
+      leftString = result;
+    } else {
+      rightString = result
+    }
+
+  })
+
+  return {leftString, rightString, operator};
+}
+
 const convertFqlToGraphql = (fqlString) => {
   const parsedFQL = babel.parse(fqlString);
   const { expression } = parsedFQL.program.body[0]
 
+  const queryStartPart = 'query MyQuery {';
+  const queryEndPart = '}}';
+
+  let baseString;
+
   const { type } = expression;
-  if (type === 'MemberExpression') {
-    const { object, property } = expression;
-    const baseString = convertObjectToString(object);
-    return `query MyQuery { ${baseString} { ${property.name} }}`
+  const { object, property } = expression;
 
-  } else if (type === 'CallExpression') {
-    const baseString = convertCallExpressionToString(expression);
+  switch (type) {
+    case 'MemberExpression':
+      baseString = convertObjectToString(object);
+      return `${queryStartPart} ${baseString} { ${property.name} ${queryEndPart}`;
 
-    if (typeof property === 'undefined') {
-      return `query MyQuery { ${baseString} }`
-    } else {
-      return `query MyQuery { ${baseString} { ${property.name} }}`;
-    }
+    case 'CallExpression':
+      baseString = convertCallExpressionToString(expression);
+      if (typeof property === 'undefined') {
+        return `${queryStartPart} ${baseString} }`;
+      } else {
+        return `${queryStartPart} ${baseString} { ${property.name} ${queryEndPart}`;
+      }
 
+    case 'BinaryExpression':
+      const { leftString, rightString, operator } = convertBinaryExpressionToString(expression);
+      return `${queryStartPart} ${leftString} ${operator} ${rightString} ${queryEndPart}`;
   }
 }
 
@@ -224,12 +296,16 @@ const logger = (input) => {
 
 logger(fql_number);
 
+logger(fql_fact);
+
+logger(fql_condition_boolean);
+
+logger(fql_condition_greater_than);
+
 // logger(fql_complex_2);
 //
 // logger(fql_complex_3);
 //
-// logger(fql_boolean);
-//
-// logger(fql_fact_variable);
+
 //
 // logger(fql_condition_greater_than);
