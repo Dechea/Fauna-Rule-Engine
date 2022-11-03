@@ -1,13 +1,26 @@
 const babel = require("@babel/parser");
 const { logicalOperatorMap } = require("./constants");
 
-
+// object
 const fql_simple = `user.all.firstWhere(u => u.id == "ckadqdbhk00go0148zzxh4bbq"  && u.name.contains("abc"))`;
 const fql_and = `user.all.firstWhere(u => u.id == "ckadqdbhk00go0148zzxh4bbq" && u.name.contains("abc")).nationality`;
 const fql_or = `user.all.firstWhere(u => u.id == "ckadqdbhk00go0148zzxh4bbq" || u.name.contains("abc")).nationality`;
 const fql_and_var = `user.all.firstWhere(u => u.id == $id && u.name.contains($name)).nationality`;
 const fql_or_var = `user.all.firstWhere(u => u.id == $id || u.name.contains($name)).nationality`;
 const fql_complex = `posts.all.firstWhere(p => p.id == $id && p.name == $name && p.something == "bla")`
+const fql_complex_2 = `posts.all.firstWhere(p => p.id == $id || ( p.name == $name && p.something == "bla") )`
+const fql_number = `posts.all.firstWhere(p => p.income > 2000  && p.year == 2022)`;
+
+// fact
+// const fql_complex_3 = `posts.all.firstWhere(p => p.id == $id || ( p.name == $name && ( p.something == "bla" && p.income > 2000 ) ) ).nationality`
+const fql_complex_3 = `posts.all.firstWhere(p => p.id == $id || ( p.name == $name && ( p.something == "bla" || ( p.income > 2000 && p.year == 2022 ) ) ) ).nationality == "DE"`
+const fql_fact_variable = '(postsId,postsName) => postsByIdAndName(postsId,postsName).income'
+
+// condition
+// const fact = new Map([[object, fact]]);
+const fql_boolean = '() => postsByIdAndName().job == true'
+const fql_condition_greater_than = '(postsId,postsName) => postsByIdAndName(postsId,postsName).income > 2000'
+
 
 const convertMemberExpressionToString = (expression) => {
   const { object, property } = expression;
@@ -70,6 +83,10 @@ const parseOperand = (operand) => {
       result += operand.extra.raw;
       break;
 
+    case "NumericLiteral":
+      result += operand.extra.raw;
+      break;
+
     case "MemberExpression":
       result += operand.property.name;
       break;
@@ -97,7 +114,15 @@ const getExpression = (argument) => {
       const leftOperand = parseOperand(argument.left);
       const rightOperand = parseOperand(argument.right);
       const { operator } = argument;
-      result += `${leftOperand} : ${rightOperand}`;
+      if(operator === '==') {
+        result += `${leftOperand} : ${rightOperand}`;
+      } else {
+        result += `${leftOperand} ${operator} ${rightOperand}`;
+      }
+      break;
+
+    case 'LogicalExpression':
+      result += convertArgsToString(argument)
       break;
 
     case "Literal":
@@ -139,6 +164,10 @@ const convertCallExpressionToString = (expression) => {
   switch (type) {
     case "MemberExpression":
       result += convertMemberExpressionToString(callee);
+      break;
+    case "CallExpression":
+      result += convertCallExpressionToString(callee);
+      break;
   }
   return `${result} { ${convertArgsToString(arguments[0].body)}} )`;
 }
@@ -149,7 +178,6 @@ const convertObjectToString = (object) => {
   switch (type) {
     case "CallExpression":
       return convertCallExpressionToString(object);
-      break;
   }
 }
 
@@ -181,15 +209,27 @@ const logger = (input) => {
   console.log('\n')
 }
 
+//
+// logger(fql_simple);
+//
+// logger(fql_and);
+//
+// logger(fql_or);
+//
+// logger(fql_and_var);
+//
+// logger(fql_or_var);
 
-logger(fql_simple);
+// logger(fql_complex);
 
-logger(fql_and);
+logger(fql_number);
 
-logger(fql_or);
-
-logger(fql_and_var);
-
-logger(fql_or_var);
-
-logger(fql_complex);
+// logger(fql_complex_2);
+//
+// logger(fql_complex_3);
+//
+// logger(fql_boolean);
+//
+// logger(fql_fact_variable);
+//
+// logger(fql_condition_greater_than);

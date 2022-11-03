@@ -630,8 +630,8 @@ const createFunction = (functionName, functionBody) => {
   })`
 }
 
-// buildRule(requestBody)
+buildRule(requestBody)
 // build(requestBodyFact)
-build(requestBodyFact2)
+// build(requestBodyFact2)
 // build(requestBodyCondition)
 
