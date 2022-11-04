@@ -23,11 +23,15 @@ const checkBool = (bool) => {
 			typeof bool.value === 'boolean');
 }
 
-const getByValue = (map, searchValue) => {
+const getMapKeyByValue = (map, searchValue) => {
 	for (let [key, value] of map.entries()) {
 		if (value === searchValue)
 			return key;
 	}
+}
+
+function getObjKeyByValue(obj, value) {
+	return Object.keys(obj).find(key => obj[key] === value);
 }
 
 const isNumeric = (value) => {
@@ -38,6 +42,7 @@ module.exports = {
 	capitalizeFirstLetter,
 	removeQuotes,
 	checkBool,
-	getByValue,
+	getMapKeyByValue,
+	getObjKeyByValue,
 	isNumeric
 }

@@ -2,7 +2,7 @@ const flatten = require('flat');
 
 const { operatorMap } = require("./constants");
 const { convertGraphQLToFQL } = require("./graphqlToFQLConverter");
-const { capitalizeFirstLetter, removeQuotes, checkBool, getByValue, isNumeric } = require("./helper");
+const { capitalizeFirstLetter, removeQuotes, checkBool, getMapKeyByValue, isNumeric } = require("./helper");
 
 let objectMap = new Map();
 const factMap = new Map();
