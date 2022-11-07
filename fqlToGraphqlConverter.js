@@ -2,6 +2,8 @@ const babel = require("@babel/parser");
 const { operatorMap, logicalOperatorMap } = require("./constants");
 const { getMapKeyByValue, getObjKeyByValue} = require("./helper");
 
+const functionCall = '() =>';
+
 // object
 const fql_simple = `user.all.firstWhere(u => u.id == "ckadqdbhk00go0148zzxh4bbq"  && u.name.contains("abc"))`;
 const fql_and = `user.all.firstWhere(u => u.id == "ckadqdbhk00go0148zzxh4bbq" && u.name.contains("abc")).nationality`;
@@ -25,14 +27,21 @@ const fql_condition_greater_than = 'posts.all.firstWhere(p => p.id == $id &&  p.
 
 const objectMap = new Map([[
     'authorById', '() => author.all.firstWhere(a => a.id == "ckadqdbhk00go0148zzxh4bbq")'
-  ]]);
+  ], [
+  'postsByIdAndName', '(postsId,postsName) => posts.all.firstWhere(p => p.id == $id && p.name == $name)'
+]]);
 const factMap = new Map([[
     'factAuthorNationality', '() => authorById().nationality'
+  ], [
+    'factAuthorHasJob', '() => authorById().job'
+  ], [
+    'factIncomeHigher2000', '(postsId,postsName) => postsByIdAndName(postsId,postsName).income'
   ]]);
 const conditionMap = new Map([[
     'conditionAuthorNationalityEqFrance', '() => factAuthorNationality() == "France"'
+  ], [
+    'conditionAuthorNationalityEqGerman', '() => factAuthorNationality() == "German"'
   ]]);
-
 
 const convertMemberExpressionToString = (expression) => {
   const { object, property } = expression;
@@ -327,7 +336,6 @@ const logger = (input) => {
 // replace fact name with newly created fact value
 // create JSON
 
-const functionCall = '() =>';
 const createJSON = (objectMap, factMap, conditionMap) => {
 
   let resultJSON;
@@ -337,7 +345,18 @@ const createJSON = (objectMap, factMap, conditionMap) => {
 
   objectMap.forEach((objectValue, objectKey) => {
     const objectName = objectKey;
-    const objectQuery = objectValue.replace(functionCall, '');
+
+    let functionVariables = '()';
+    let functionCallToReplace;
+
+    if (objectValue.includes(functionCall)) {
+      functionCallToReplace = functionCall;
+    } else {
+      functionVariables = objectValue.split(' => ')[0];
+      functionCallToReplace = `${functionVariables} => `;
+    }
+
+    const objectQuery = objectValue.replace(functionCallToReplace, '');
     const updatedObjectQuery = convertFqlToGraphql(objectQuery);
 
     updatedObjectMap.set(objectName, updatedObjectQuery);
@@ -345,16 +364,16 @@ const createJSON = (objectMap, factMap, conditionMap) => {
 
     factMap.forEach((factValue, factKey) => {
       const factName = factKey;
-      let factQuery = factValue.replace(functionCall, '');
+      let factQuery = factValue.replace(functionCallToReplace, '');
 
       if (factQuery.includes(objectName)) {
-        factQuery = factQuery.replace(`${objectName}()`, `${objectQuery}`)
-      }
-      const updatedFactQuery = convertFqlToGraphql(factQuery);
+        factQuery = factQuery.replace(`${objectName}${functionVariables}`, `${objectQuery}`)
+        const updatedFactQuery = convertFqlToGraphql(factQuery);
 
-      updatedFactMap.set(factName, updatedFactQuery);
-      // has to delete entry after completing transform operation
-      factMap.delete(factName);
+        updatedFactMap.set(factName, updatedFactQuery);
+        // has to delete entry after completing transform operation
+        factMap.delete(factName);
+      }
 
     //   conditionMap.forEach((value, key) => {
     //     const conditionName = key;
