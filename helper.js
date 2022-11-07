@@ -7,6 +7,15 @@ const capitalizeFirstLetter = (inputString) => {
 	}
 }
 
+const deCapitalizeFirstLetter = (inputString) => {
+	if(typeof inputString == "string") {
+		return inputString.charAt(0).toLowerCase() + inputString.slice(1);
+	}
+	else {
+		return  inputString;
+	}
+}
+
 const removeQuotes = (inputString) => {
 	if(typeof inputString == "string") {
 		return inputString.replace(/^"(.+)"$/,'$1');
@@ -40,6 +49,7 @@ const isNumeric = (value) => {
 
 module.exports = {
 	capitalizeFirstLetter,
+	deCapitalizeFirstLetter,
 	removeQuotes,
 	checkBool,
 	getMapKeyByValue,
