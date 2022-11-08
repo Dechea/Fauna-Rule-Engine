@@ -39,12 +39,20 @@ const getMapKeyByValue = (map, searchValue) => {
 	}
 }
 
-function getObjKeyByValue(obj, value) {
+const getObjKeyByValue = (obj, value) => {
 	return Object.keys(obj).find(key => obj[key] === value);
 }
 
 const isNumeric = (value) => {
 	return /^\d+$/.test(value);
+}
+
+const isEmpty = (obj) => {
+	return Object.getOwnPropertyNames(obj).length === 0;
+}
+
+const getFirstOrAll = (map) => {
+	return map.size === 1 ? map.values().next().value : Array.from(map.values());
 }
 
 module.exports = {
@@ -54,5 +62,7 @@ module.exports = {
 	checkBool,
 	getMapKeyByValue,
 	getObjKeyByValue,
-	isNumeric
+	isNumeric,
+	isEmpty,
+	getFirstOrAll
 }

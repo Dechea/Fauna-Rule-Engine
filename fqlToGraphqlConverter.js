@@ -1,6 +1,6 @@
 const babel = require("@babel/parser");
 const { operatorMap, logicalOperatorMap } = require("./constants");
-const { getMapKeyByValue, getObjKeyByValue, deCapitalizeFirstLetter} = require("./helper");
+const { getMapKeyByValue, getObjKeyByValue, deCapitalizeFirstLetter, isEmpty, getFirstOrAll} = require("./helper");
 
 const functionCall = '() =>';
 
@@ -45,14 +45,14 @@ const factMap = new Map([[
   ]]);
 const conditionMap = new Map([[
   'conditionAuthorNationalityEqFrance', '() => factAuthorNationality() == "France"'
-],[
-  'conditionPostsIncomeGt2000', '(postsId,postsName) => factPostsIncome(postsId,postsName) > 2000'
-],[
-  'conditionPostsHasJob', '(postsId,postsName) => factPostsJob(postsId,postsName) == true'
-],[
-  'conditionUserIncomeGt2000', '(userId) => factUserIncome(userId) > 2000'
-],[
-  'conditionUserHasJob', '(userId) => factUserJob(userId) == true'
+// ],[
+//   'conditionPostsIncomeGt2000', '(postsId,postsName) => factPostsIncome(postsId,postsName) > 2000'
+// ],[
+//   'conditionPostsHasJob', '(postsId,postsName) => factPostsJob(postsId,postsName) == true'
+// ],[
+//   'conditionUserIncomeGt2000', '(userId) => factUserIncome(userId) > 2000'
+// ],[
+//   'conditionUserHasJob', '(userId) => factUserJob(userId) == true'
 ]]);
 const ruleMap = new Map([[
   'RuleIsEligibleForCredit', '(postsId,postsName,userId) => (conditionAuthorNationalityEqFrance() && (conditionPostsIncomeGt2000(postsId,postsName) || (conditionPostsHasJob(postsId,postsName) || (conditionUserIncomeGt2000(userId) && conditionUserHasJob(userId)))))'
@@ -353,7 +353,7 @@ const logger = (input) => {
 
 const createJSON = (objectMap, factMap, conditionMap, ruleMap) => {
 
-  let resultJSON;
+  let resultJSON = {};
   let updatedObjectMap = new Map();
   let updatedFactMap = new Map();
   let updatedConditionMap = new Map();
@@ -388,7 +388,7 @@ const createJSON = (objectMap, factMap, conditionMap, ruleMap) => {
         // has to delete entry after completing transform operation
         factMap.delete(factName);
 
-        conditionMap.forEach((conditionValue, conditionKey) => {
+        conditionMap?.forEach((conditionValue, conditionKey) => {
           if (conditionValue.includes(factName)) {
             const conditionName = conditionKey;
             let conditionQuery = conditionValue.replace(functionCallToReplace, '');
@@ -412,7 +412,7 @@ const createJSON = (objectMap, factMap, conditionMap, ruleMap) => {
 
   // After all parts of the JSON are created
   // Merge them to return the full JSON
-  ruleMap.forEach((ruleValue, ruleKey) =>{
+  ruleMap?.forEach((ruleValue, ruleKey) => {
 
     const ruleName = deCapitalizeFirstLetter(ruleKey.replace('Rule', ''));
     let splittedString = ruleValue.split(' (');
@@ -433,7 +433,7 @@ const createJSON = (objectMap, factMap, conditionMap, ruleMap) => {
       const conditionSearchParam = ruleEntry.substring(0, ruleEntry.indexOf('('))
       let entry = {};
 
-      if(i === 0) {
+      if (i === 0) {
         // At top level the json will be created
         // only one all/any can be placed
         if (ruleEntry.includes('&&')) {
@@ -501,6 +501,14 @@ const createJSON = (objectMap, factMap, conditionMap, ruleMap) => {
       }
     }
   })
+
+  if (isEmpty(resultJSON)) {
+    if (updatedConditionMap.size > 0) {
+      resultJSON = getFirstOrAll(updatedConditionMap);
+    } else if (updatedFactMap.size > 0) {
+      resultJSON = getFirstOrAll(updatedFactMap);
+    }
+  }
 
   return resultJSON;
 }
