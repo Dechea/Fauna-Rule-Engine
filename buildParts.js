@@ -146,9 +146,12 @@ function createObjectName(source) {
 			searchParams.push('And');
 		} else if (searchParamPart.includes('$')) {
 			let tempName = searchParamPart.replace('$', '');
-			tempName = tempName.replace(')', '');
-			tempName = `${collection}${capitalizeFirstLetter(tempName)}`;
+			const tempNameWithoutBrackets = tempName.replace(')', '');
+			tempName = `${collection}${capitalizeFirstLetter(tempNameWithoutBrackets)}`;
 			variableNames.push(tempName);
+			// replace var name in query
+			// with dynamic generated var name
+			object = object.replaceAll(`$${tempNameWithoutBrackets}`, tempName);
 		} else if (searchParamPart.includes('"')) {
 			fixedValues.push(
 				searchParamPart.replaceAll('"', '').replaceAll(')', '')
@@ -193,7 +196,7 @@ const buildFactPart = (source) => {
 
 	let fact;
 
-	if (variableNames.size === 0) {
+	if (variableNames.length === 0) {
 		object = `()${functionCall}${object}`;
 		fact = `()${functionCall}${objectName}().${factValue}`;
 
