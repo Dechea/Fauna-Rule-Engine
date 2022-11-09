@@ -106,16 +106,18 @@ const createObjectMap = (data) => {
 				factMap = buildFactPart(inputObject.source);
 				conditionMap = buildConditionPart(factMap, inputObject);
 
-				if (isNumeric(updatedKey)) {
-					// Add object name to map
-					// So we can find and replace it later
-					if (checkName === updatedName) {
-						topLevelMap.set(updatedName, conditionMap);
+				// Add object name to map
+				// So we can find and replace it later
+				if (checkName === updatedName) {
+					let correctName = updatedName.split('.');
+					correctName.pop();
+					correctName = correctName.join('.')
+					topLevelMap.set(correctName, conditionMap);
 
-						// Reset object after adding result data
-						inputObject = {};
-					}
+					// Reset object after adding result data
+					inputObject = {};
 				}
+
 			}
 		}
 		// necessary for usage of old/new map
@@ -296,7 +298,11 @@ const buildRulePart = (inputMap, ruleName) => {
 	inputMap.forEach((value, key) => {
 		allUsedVariables.add(value.get('variable'));
 
+		// create correct function call
+		// incl. necessary parameter
 		temp = Object.keys(value.get('condition'));
+		temp += Object.values(value.get('condition'))
+		temp = temp.substring(0, temp.indexOf(' => '))
 
 		// check for position
 		if (key === oldKey && key.length === oldKey.length) {
@@ -316,9 +322,13 @@ const buildRulePart = (inputMap, ruleName) => {
 			// add brackets and operator
 			// only if it's not the last key
 			if(key !== lastKey) {
-				ruleString += openBracket;
+
+				// only add a bracket if it's a new array
+				if(key.length !== oldKey.length) {
+					ruleString += openBracket;
+					counterBrackets++;
+				}
 				ruleString += temp;
-				counterBrackets++;
 
 				if (updatedKey.startsWith('all')) {
 					ruleString += ' && '
