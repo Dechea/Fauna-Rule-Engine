@@ -111,6 +111,9 @@ const createObjectMap = (data) => {
 					// So we can find and replace it later
 					if (checkName === updatedName) {
 						topLevelMap.set(updatedName, conditionMap);
+
+						// Reset object after adding result data
+						inputObject = {};
 					}
 				}
 			}
