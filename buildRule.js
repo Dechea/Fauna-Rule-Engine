@@ -2,7 +2,13 @@ const flatten = require('flat');
 
 const { operatorMap } = require("./constants");
 const { convertGraphQLToFQL } = require("./graphqlToFQLConverter");
-const { capitalizeFirstLetter, removeQuotes, checkBool, getMapKeyByValue, isNumeric } = require("./helper");
+const {
+  capitalizeFirstLetter,
+  removeQuotes,
+  checkBool,
+  isNumeric,
+  removeSpaces
+} = require("./helper");
 
 let objectMap = new Map();
 const factMap = new Map();
@@ -439,7 +445,7 @@ const buildFactPart = (source) => {
       }
     }
   })
-  objectName = objectName.replace(/ /g, '');
+  objectName = removeSpaces(objectName);
 
   // Create function names - Fact
   let factName = sourceString.split('.');
@@ -567,7 +573,7 @@ const buildParts = (source, comparator, target) => {
   })
 
   let objectName = `${udfSplit[0]}By${searchParams.join('')}`;
-  objectName = objectName.replace(/ /g, '');
+  objectName = removeSpaces(objectName);
 
   // Create function names - Fact
   let factName = sourceString.split('.');

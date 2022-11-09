@@ -1,9 +1,14 @@
 const babel = require("@babel/parser");
-const { operatorMap, logicalOperatorMap } = require("./constants");
-const { getMapKeyByValue, getObjKeyByValue, deCapitalizeFirstLetter, isEmpty, getFirstOrAll, capitalizeFirstLetter} = require("./helper");
+const {
+  operatorMap,
+  logicalOperatorMap
+} = require("./constants");
+const {
+  getObjKeyByValue,
+  capitalizeFirstLetter,
+} = require("./helper");
 
-const functionCall = '() =>';
-
+// TEST CASES
 // // object
 // const fql_simple = `user.all.firstWhere(u => u.id == "ckadqdbhk00go0148zzxh4bbq"  && u.name.contains("abc"))`;
 // const fql_and = `user.all.firstWhere(u => u.id == "ckadqdbhk00go0148zzxh4bbq" && u.name.contains("abc")).nationality`;
@@ -24,39 +29,6 @@ const functionCall = '() =>';
 // // const fact = new Map([[object, fact]]);
 // const fql_condition_boolean = 'posts.all.firstWhere(p => p.id == $id &&  p.name == $name).job == true'
 // const fql_condition_greater_than = 'posts.all.firstWhere(p => p.id == $id &&  p.name == $name).income > 2000'
-
-const objectMap = new Map([[
-  'authorById', '() => author.all.firstWhere(a => a.id == "ckadqdbhk00go0148zzxh4bbq")'
-],[
-  'postsByIdAndName', '(postsId,postsName) => posts.all.firstWhere(p => p.id == postsId && p.name == postsName)'
-],[
-  'userById', '(userId) => user.all.firstWhere(u => u.id == userId)'
-]]);
-const factMap = new Map([[
-  'factAuthorNationality', '() => authorById().nationality'
-],[
-  'factPostsIncome', '(postsId,postsName) => postsByIdAndName(postsId,postsName).income'
-],[
-  'factPostsJob', '(postsId,postsName) => postsByIdAndName(postsId,postsName).job'
-],[
-  'factUserIncome', '(userId) => userById(userId).income'
-],[
-  'factUserJob', '(userId) => userById(userId).job'
-  ]]);
-const conditionMap = new Map([[
-  'conditionAuthorNationalityEqFrance', '() => factAuthorNationality() == "France"'
-],[
-  'conditionPostsIncomeGt2000', '(postsId,postsName) => factPostsIncome(postsId,postsName) > 2000'
-],[
-  'conditionPostsHasJob', '(postsId,postsName) => factPostsJob(postsId,postsName) == true'
-],[
-  'conditionUserIncomeGt2000', '(userId) => factUserIncome(userId) > 2000'
-],[
-  'conditionUserHasJob', '(userId) => factUserJob(userId) == true'
-]]);
-const ruleMap = new Map([[
-  'RuleIsEligibleForCredit', '(postsId,postsName,userId) => (conditionAuthorNationalityEqFrance() && (conditionPostsIncomeGt2000(postsId,postsName) || (conditionPostsHasJob(postsId,postsName) || (conditionUserIncomeGt2000(userId) && conditionUserHasJob(userId)))))'
-]])
 
 const convertMemberExpressionToString = (expression) => {
   const { object, property } = expression;
@@ -350,189 +322,6 @@ const logger = (input) => {
 // console.log(factMap)
 // console.log(conditionMap)
 
-// use input maps:
-// search in fact map for object name
-// replace object name with object value
-// search in condition map for fact name
-// replace fact name with newly created fact value
-// create JSON
-
-const createJSON = (objectMap, factMap, conditionMap, ruleMap) => {
-
-  let resultJSON = {};
-  let updatedObjectMap = new Map();
-  let updatedFactMap = new Map();
-  let updatedConditionMap = new Map();
-
-  objectMap.forEach((objectValue, objectKey) => {
-    const objectName = objectKey;
-
-    let functionVariables = '()';
-    let functionCallToReplace;
-
-    if (objectValue.includes(functionCall)) {
-      functionCallToReplace = functionCall;
-    } else {
-      functionVariables = objectValue.split(' => ')[0];
-      functionCallToReplace = `${functionVariables} => `;
-    }
-
-    const objectQuery = objectValue.replace(functionCallToReplace, '');
-    const updatedObjectQuery = convertFqlToGraphql(objectQuery);
-
-    updatedObjectMap.set(objectName, updatedObjectQuery);
-
-    factMap.forEach((factValue, factKey) => {
-      if (factValue.includes(objectName)) {
-        const factName = factKey;
-        let factQuery = factValue.replace(functionCallToReplace, '');
-
-        factQuery = factQuery.replace(`${objectName}${functionVariables}`, `${objectQuery}`)
-        const updatedFactQuery = convertFqlToGraphql(factQuery);
-
-        updatedFactMap.set(factName, updatedFactQuery);
-        // has to delete entry after completing transform operation
-        factMap.delete(factName);
-
-        conditionMap?.forEach((conditionValue, conditionKey) => {
-          if (conditionValue.includes(factName)) {
-            const conditionName = conditionKey;
-            let conditionQuery = conditionValue.replace(functionCallToReplace, '');
-
-            conditionQuery = conditionQuery.replace(`${factName}${functionVariables}`, `${factQuery}`)
-            conditionQuery = conditionQuery.replace(' ', '');
-            const updatedConditionQuery = convertFqlToGraphql(conditionQuery);
-
-            updatedConditionMap.set(conditionName, updatedConditionQuery);
-            // has to delete entry after completing transform operation
-            conditionMap.delete(conditionName);
-          }
-        });
-      }
-    });
-
-    // has to delete entry after completing transform operation
-    // so no duplicates will be present in the transformed map
-    objectMap.delete(objectName);
-  });
-
-  // After all parts of the JSON are created
-  // Merge them to return the full JSON
-  ruleMap?.forEach((ruleValue, ruleKey) => {
-
-    const ruleName = deCapitalizeFirstLetter(ruleKey.replace('Rule', ''));
-    let splittedString = ruleValue.split(' (');
-
-    // remove vars from rule string
-    splittedString.shift();
-
-    const bracketsAmount = splittedString.length;
-    let lastValue = splittedString[splittedString.length - 1];
-    lastValue = lastValue.substring(0, lastValue.length - bracketsAmount)
-    splittedString[splittedString.length - 1] = lastValue;
-
-    let tempLastKey = '';
-    let tempLastIndex = 0;
-
-    for (let i = 0; i < splittedString.length; i++){
-      const ruleEntry = splittedString[i];
-      const conditionSearchParam = ruleEntry.substring(0, ruleEntry.indexOf('('))
-      let entry = {};
-
-      if (i === 0) {
-        // At top level the json will be created
-        // only one all/any can be placed
-        if (ruleEntry.includes('&&')) {
-          resultJSON = {
-            name: ruleName,
-            type: 'Rule',
-            all: [
-              updatedConditionMap.get(conditionSearchParam),
-            ]
-          };
-          tempLastKey = 'all';
-        } else {
-          resultJSON = {
-            name: ruleName,
-            type: 'Rule',
-            any: [
-              updatedConditionMap.get(conditionSearchParam),
-            ]
-          };
-          tempLastKey = 'any';
-        }
-      } else if(i === splittedString.length - 1) {
-        // In the last element we've two conditions
-        if (ruleEntry.includes('&&')) {
-          const temp = ruleEntry.split(' && ');
-
-          const blub = temp[0].substring(0, temp[0].indexOf('('))
-          entry = {
-            all: [
-              updatedConditionMap.get(blub),
-              updatedConditionMap.get(temp[1].substring(0, temp[1].indexOf('(')))
-            ]
-          };
-        } else {
-          const temp = ruleEntry.split('||');
-          entry = {
-            any: [
-              updatedConditionMap.get(temp[0].substring(0, ruleEntry.indexOf('('))),
-              updatedConditionMap.get(temp[1].substring(0, ruleEntry.indexOf('(')))
-            ]
-          };
-        }
-        // Get current position in object
-        // Add the created entries
-        tempLastKey.split('.').reduce((o,i)=> o[i], resultJSON).push(entry);
-      } else {
-        if (ruleEntry.includes('&&')) {
-          entry = {
-            all: [
-              updatedConditionMap.get(conditionSearchParam),
-            ]
-          };
-        } else {
-          entry = {
-            any: [
-              updatedConditionMap.get(conditionSearchParam),
-            ]
-          };
-        }
-
-        // Get current position in object
-        // Add the created entries
-        // Updated the index
-        tempLastKey.split('.').reduce((o,i)=> o[i], resultJSON).push(entry);
-        tempLastIndex = tempLastKey.split('.').reduce((o,i)=> o[i], resultJSON).length - 1;
-        tempLastKey += `.${tempLastIndex}.${Object.keys(entry)}`
-      }
-    }
-  })
-
-  if (isEmpty(resultJSON)) {
-    if (updatedConditionMap.size > 0) {
-      resultJSON = getFirstOrAll(updatedConditionMap);
-    } else if (updatedFactMap.size > 0) {
-      resultJSON = getFirstOrAll(updatedFactMap);
-    }
-  }
-
-  console.log(JSON.stringify(resultJSON));
-
-  return resultJSON;
-}
-
-console.log('INPUT:')
-console.log(objectMap)
-console.log(factMap)
-console.log(conditionMap)
-console.log(ruleMap)
-console.log('-----------------')
-console.log('OUTPUT:')
-console.log(createJSON(objectMap, factMap, conditionMap, ruleMap));
-
-
 // logger(fql_simple);
 
 // logger(fql_and);
@@ -557,6 +346,8 @@ console.log(createJSON(objectMap, factMap, conditionMap, ruleMap));
 
 //logger(fql_complex_3);
 
-
-
 // logger(fql_condition_greater_than);
+
+module.exports = {
+  convertFqlToGraphql
+}

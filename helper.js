@@ -25,6 +25,10 @@ const removeQuotes = (inputString) => {
 	}
 }
 
+const removeSpaces = (inputString) => {
+	return inputString.replace(/ /g, '');
+}
+
 const checkBool = (bool) => {
 	return typeof bool === 'boolean' ||
 		(typeof bool === 'object' &&
@@ -55,14 +59,20 @@ const getFirstOrAll = (map) => {
 	return map.size === 1 ? map.values().next().value : Array.from(map.values());
 }
 
+const countOccurrences = (str, find) => {
+	return (str.split(find)).length - 1;
+}
+
 module.exports = {
 	capitalizeFirstLetter,
 	deCapitalizeFirstLetter,
 	removeQuotes,
+	removeSpaces,
 	checkBool,
 	getMapKeyByValue,
 	getObjKeyByValue,
 	isNumeric,
 	isEmpty,
-	getFirstOrAll
+	getFirstOrAll,
+	countOccurrences
 }
