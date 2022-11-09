@@ -168,11 +168,11 @@ const buildRule = (inputObject, flattMap) => {
 
   const topLevelMap = createObjectMap(flattMap);
 
-  console.log(topLevelMap)
-
   const ruleValue = buildRulePart(topLevelMap, ruleName);
 
   console.log(ruleValue)
+
+  return ruleValue;
 }
 
 build(requestBody);
