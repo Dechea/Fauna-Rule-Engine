@@ -1,6 +1,6 @@
 const babel = require("@babel/parser");
 const { operatorMap, logicalOperatorMap } = require("./constants");
-const { getMapKeyByValue, getObjKeyByValue, deCapitalizeFirstLetter, isEmpty, getFirstOrAll} = require("./helper");
+const { getMapKeyByValue, getObjKeyByValue, deCapitalizeFirstLetter, isEmpty, getFirstOrAll, capitalizeFirstLetter} = require("./helper");
 
 const functionCall = '() =>';
 
@@ -28,9 +28,9 @@ const functionCall = '() =>';
 const objectMap = new Map([[
   'authorById', '() => author.all.firstWhere(a => a.id == "ckadqdbhk00go0148zzxh4bbq")'
 ],[
-  'postsByIdAndName', '(postsId,postsName) => posts.all.firstWhere(p => p.id == $id && p.name == $name)'
+  'postsByIdAndName', '(postsId,postsName) => posts.all.firstWhere(p => p.id == postsId && p.name == postsName)'
 ],[
-  'userById', '(userId) => user.all.firstWhere(u => u.id == id)'
+  'userById', '(userId) => user.all.firstWhere(u => u.id == userId)'
 ]]);
 const factMap = new Map([[
   'factAuthorNationality', '() => authorById().nationality'
@@ -45,14 +45,14 @@ const factMap = new Map([[
   ]]);
 const conditionMap = new Map([[
   'conditionAuthorNationalityEqFrance', '() => factAuthorNationality() == "France"'
-// ],[
-//   'conditionPostsIncomeGt2000', '(postsId,postsName) => factPostsIncome(postsId,postsName) > 2000'
-// ],[
-//   'conditionPostsHasJob', '(postsId,postsName) => factPostsJob(postsId,postsName) == true'
-// ],[
-//   'conditionUserIncomeGt2000', '(userId) => factUserIncome(userId) > 2000'
-// ],[
-//   'conditionUserHasJob', '(userId) => factUserJob(userId) == true'
+],[
+  'conditionPostsIncomeGt2000', '(postsId,postsName) => factPostsIncome(postsId,postsName) > 2000'
+],[
+  'conditionPostsHasJob', '(postsId,postsName) => factPostsJob(postsId,postsName) == true'
+],[
+  'conditionUserIncomeGt2000', '(userId) => factUserIncome(userId) > 2000'
+],[
+  'conditionUserHasJob', '(userId) => factUserJob(userId) == true'
 ]]);
 const ruleMap = new Map([[
   'RuleIsEligibleForCredit', '(postsId,postsName,userId) => (conditionAuthorNationalityEqFrance() && (conditionPostsIncomeGt2000(postsId,postsName) || (conditionPostsHasJob(postsId,postsName) || (conditionUserIncomeGt2000(userId) && conditionUserHasJob(userId)))))'
@@ -148,7 +148,13 @@ const getExpression = (argument) => {
   switch(type){
     case "BinaryExpression":
       const leftOperand = parseOperand(argument.left);
-      const rightOperand = parseOperand(argument.right);
+      let rightOperand = parseOperand(argument.right);
+      // In case of variables
+      // Remove the dynamic part from it
+      // Add $ to mark as variable
+      if(rightOperand.includes(capitalizeFirstLetter(leftOperand))) {
+        rightOperand = `$${leftOperand}`;
+      }
       const { operator } = argument;
       if(operator === '==') {
         result += `${leftOperand} : ${rightOperand}`;
@@ -459,9 +465,11 @@ const createJSON = (objectMap, factMap, conditionMap, ruleMap) => {
         // In the last element we've two conditions
         if (ruleEntry.includes('&&')) {
           const temp = ruleEntry.split(' && ');
+
+          const blub = temp[0].substring(0, temp[0].indexOf('('))
           entry = {
             all: [
-              updatedConditionMap.get(temp[0].substring(0, temp[0].indexOf('('))),
+              updatedConditionMap.get(blub),
               updatedConditionMap.get(temp[1].substring(0, temp[1].indexOf('(')))
             ]
           };
@@ -509,6 +517,8 @@ const createJSON = (objectMap, factMap, conditionMap, ruleMap) => {
       resultJSON = getFirstOrAll(updatedFactMap);
     }
   }
+
+  console.log(JSON.stringify(resultJSON));
 
   return resultJSON;
 }
