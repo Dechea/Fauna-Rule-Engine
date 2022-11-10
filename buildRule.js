@@ -126,13 +126,13 @@ const build = (obj) => {
 
   switch (flattMap.get('type')) {
     case 'Fact':
-      buildFact(obj)
+      return buildFact(obj)
       break;
     case 'Condition':
-      buildCondition(obj)
+      return buildCondition(obj)
       break;
     case 'Rule':
-      buildRule(obj, flattMap)
+      return buildRule(obj, flattMap)
       break;
   }
 
@@ -150,29 +150,26 @@ const build = (obj) => {
 }
 const buildFact = (inputObject) => {
 
-  console.log(buildFactPart(inputObject))
-
+  return buildFactPart(inputObject);
 }
 
 const buildCondition = (inputObject) => {
 
-  const map = buildFactPart(inputObject.source)
+  const map = buildFactPart(inputObject.source);
 
-  console.log(buildConditionPart(map, inputObject))
-
+  return buildConditionPart(map, inputObject);
 }
 
 const buildRule = (inputObject, flattMap) => {
 
   const ruleName = flattMap.get('name');
-
   const topLevelMap = createObjectMap(flattMap);
 
-  const ruleValue = buildRulePart(topLevelMap, ruleName);
+  return buildRulePart(topLevelMap, ruleName);
+}
 
-  console.log(ruleValue)
-
-  return ruleValue;
+module.exports = {
+  build
 }
 
 build(requestBody);
