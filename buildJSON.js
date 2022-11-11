@@ -1,48 +1,12 @@
 const {
 	removeSpaces,
 	deCapitalizeFirstLetter,
-	countOccurrences,
 	isEmpty,
 	getFirstOrAll
 } = require("./helper");
 const { convertFqlToGraphql } = require("./fqlToGraphqlConverter");
 
 const functionCall = '() =>';
-
-// TEST CASES
-const objectMap = new Map([[
-	'authorById', '() => author.all.firstWhere(a => a.id == "ckadqdbhk00go0148zzxh4bbq")'
-],[
-	'postsByIdAndName', '(postsId,postsName) => posts.all.firstWhere(p => p.id == postsId && p.name == postsName)'
-],[
-	'userById', '(userId) => user.all.firstWhere(u => u.id == userId)'
-]]);
-const factMap = new Map([[
-	'factAuthorNationality', '() => authorById().nationality'
-],[
-	'factPostsIncome', '(postsId,postsName) => postsByIdAndName(postsId,postsName).income'
-],[
-	'factPostsJob', '(postsId,postsName) => postsByIdAndName(postsId,postsName).job'
-],[
-	'factUserIncome', '(userId) => userById(userId).income'
-],[
-	'factUserJob', '(userId) => userById(userId).job'
-]]);
-const conditionMap = new Map([[
-	'conditionAuthorNationalityEqFrance', '() => factAuthorNationality() == "France"'
-],[
-	'conditionPostsIncomeGt2000', '(postsId,postsName) => factPostsIncome(postsId,postsName) > 2000'
-],[
-	'conditionPostsHasJob', '(postsId,postsName) => factPostsJob(postsId,postsName) == true'
-],[
-	'conditionUserIncomeGt2000', '(userId) => factUserIncome(userId) > 2000'
-],[
-	'conditionUserHasJob', '(userId) => factUserJob(userId) == true'
-]]);
-const ruleMap = new Map([[
-	'RuleIsEligibleForCredit', '(postsId,postsName,userId) => (conditionAuthorNationalityEqFrance() && (conditionPostsIncomeGt2000(postsId,postsName) || conditionPostsHasJob(postsId,postsName) || (conditionUserIncomeGt2000(userId) && conditionUserHasJob(userId))))'
-]])
-
 
 const createJSON = (objectMap, factMap, conditionMap, ruleMap) => {
 
@@ -208,11 +172,6 @@ const createRuleEntry = (ruleEntry, operator, updatedConditionMap) => {
 	}
 }
 
-console.log('INPUT:')
-console.log(objectMap)
-console.log(factMap)
-console.log(conditionMap)
-console.log(ruleMap)
-console.log('-----------------')
-console.log('OUTPUT:')
-console.log(createJSON(objectMap, factMap, conditionMap, ruleMap));
+module.exports = {
+	createJSON
+}
