@@ -3,12 +3,15 @@ const {
 	capitalizeFirstLetter,
 	removeQuotes,
 	checkBool,
-	isNumeric
 } = require("./helper");
 const { operatorMap } = require("./constants");
 
-const functionCall = ' => ';
-const prefix = 'RE_';
+const FUNCTION_CALL = ' => ';
+const PREFIX = 'RE_';
+const OBJECT = 'object';
+const FACT = 'fact';
+const VARIABLE = 'variable';
+const CONDITION = 'condition';
 
 const getQueries = (data, queries) => {
 	if (!data)
@@ -22,22 +25,20 @@ const getQueries = (data, queries) => {
 			getQueries(any, queries);
 		else {
 			const { source, target } = data[index];
-			if (source?.type?.toLowerCase() === 'fact')
+			if (source?.type?.toLowerCase() === FACT)
 				queries.push(source.value);
-			if (target?.type?.toLowerCase() === 'fact')
+			if (target?.type?.toLowerCase() === FACT)
 				queries.push(target.value);
 		}
 	}
 }
 
-const getCorrectOperator = (operator) => {
-	return operatorMap[operator.toLowerCase()] || operator;
-}
+const getCorrectOperator = operator => operatorMap[operator.toLowerCase()] || operator;
 
 const getTargetString = (operatorString, target) => {
 	const { type, value } = target;
 
-	if (type.toLowerCase() === 'fact')
+	if (type.toLowerCase() === FACT)
 		return operatorString === '=='
 			? `${convertGraphQLToFQL(value)}`
 			: `(${convertGraphQLToFQL(value)})`;
@@ -48,7 +49,6 @@ const getTargetString = (operatorString, target) => {
 }
 
 const createObjectMap = (data) => {
-
 	let topLevelMap = new Map();
 	let objectName;
 	let inputObject = {};
@@ -64,12 +64,12 @@ const createObjectMap = (data) => {
 		keys.pop();
 
 		const updatedAmount = keys.length;
-		const updatedKey = keys[updatedAmount-1];
+		const updatedKey = keys[updatedAmount - 1];
 		const updatedName = keys.join('.');
 		const checkName = key.slice(0, updatedName.length);
 		const valueName = key.slice(updatedName.length + 1, key.length);
 
-		if (updatedKey !== undefined) {
+		if (updatedKey) {
 			// Create object name
 			if(updatedKey === 'source') {
 				if (valueName === 'value') {
@@ -94,14 +94,13 @@ const createObjectMap = (data) => {
 			// Check if the whole object is set
 			// To create the sub objects
 			// And set it to the correct place
-			// TODO add check for old value of source/target
 			if (
-				inputObject.source?.type !== undefined
-				&& inputObject.source?.name !== undefined
-				&& inputObject.source?.value !== undefined
+				inputObject.source?.type
+				&& inputObject.source?.name
+				&& inputObject.source?.value
 				&& 'comparator' in inputObject
-				&& inputObject.target?.type !== undefined
-				&& inputObject.target?.value !== undefined
+				&& inputObject.target?.type
+				&& inputObject.target?.value
 			) {
 				factMap = buildFactPart(inputObject.source);
 				conditionMap = buildConditionPart(factMap, inputObject);
@@ -128,7 +127,6 @@ const createObjectMap = (data) => {
 }
 
 function createObjectName(source) {
-
 	const sourceString = convertGraphQLToFQL(source);
 	const collection = sourceString.split('.')[0];
 
@@ -162,7 +160,7 @@ function createObjectName(source) {
 				searchParamPart.replaceAll('"', '').replaceAll(')', '')
 			);
 		}
-	})
+	});
 
 	let objectName = `${udfSplit[0]}By`;
 	let index = 0;
@@ -178,13 +176,13 @@ function createObjectName(source) {
 				objectName += `-${fixedValues[index++]}`;
 			}
 		}
-	})
+	});
+
 	objectName = objectName.replace(/ /g, '');
 	return {object, variableNames, objectName};
 }
 
 const buildFactPart = (source) => {
-	//
 	const sourceString = convertGraphQLToFQL(source.value);
 
 	let {object, variableNames, objectName} = createObjectName(source.value);
@@ -192,7 +190,7 @@ const buildFactPart = (source) => {
 	// Create function names - Fact
 	let factName = sourceString.split('.');
 	const collectionCapitalized = capitalizeFirstLetter(factName[0]);
-	const sourceType = capitalizeFirstLetter(factName[factName.length-1]);
+	const sourceType = capitalizeFirstLetter(factName[factName.length - 1]);
 	factName = `fact${collectionCapitalized}${sourceType}`;
 
 	// Check for variable usage in gql query
@@ -200,29 +198,28 @@ const buildFactPart = (source) => {
 	factValue = factValue[factValue.length-1]
 
 	let fact;
-
-	if (variableNames.length === 0) {
-		object = `()${functionCall}${object}`;
-		fact = `()${functionCall}${objectName}().${factValue}`;
-
+	if (!variableNames.length) {
+		object = `()${FUNCTION_CALL}${object}`;
+		fact = `()${FUNCTION_CALL}${objectName}().${factValue}`;
 	} else {
 		const updatedVariableName = variableNames.join(',');
-		const updatedObject = object.replaceAll('$', '')
+		const updatedObject = object.replaceAll('$', '');
 
-		object = `(${updatedVariableName})${functionCall}${updatedObject}`;
-		fact = `(${updatedVariableName})${functionCall}${objectName}(${updatedVariableName}).${factValue}`;
-
+		object = `(${updatedVariableName})${FUNCTION_CALL}${updatedObject}`;
+		fact = `(${updatedVariableName})${FUNCTION_CALL}${objectName}(${updatedVariableName}).${factValue}`;
 	}
 
 	const resultMap = new Map();
-	resultMap.set('object', {[objectName]: object})
-	resultMap.set('fact', {[factName]: fact})
-	resultMap.set('variable', variableNames);
+	resultMap.set(OBJECT, {[objectName]: object});
+	resultMap.set(FACT, {[factName]: fact});
+	resultMap.set(VARIABLE, variableNames);
 
 	return resultMap;
 }
 
 const buildConditionPart = (inputMap, inputObject) => {
+	let condition;
+	let conditionName;
 
 	const comparatorString = inputObject.comparator;
 	const source = inputObject.source;
@@ -231,12 +228,12 @@ const buildConditionPart = (inputMap, inputObject) => {
 	const operatorString = getCorrectOperator(comparatorString);
 	const targetString = getTargetString(operatorString, target);
 
-	const objectObject = inputMap.get('object');
-	let objectName = Object.keys(objectObject)[0];
+	const objectObject = inputMap.get(OBJECT);
+	let [objectName] = Object.keys(objectObject);
 
-	const factObject = inputMap.get('fact');
-	let factName = Object.keys(factObject)[0];
-	const variableNames = inputMap.get('variable');
+	const factObject = inputMap.get(FACT);
+	let [factName] = Object.keys(factObject);
+	const variableNames = inputMap.get(VARIABLE);
 
 	const collection = objectName.split('By')[0];
 	const collectionCapitalized = capitalizeFirstLetter(collection);
@@ -246,45 +243,42 @@ const buildConditionPart = (inputMap, inputObject) => {
 	const formattedComparator = capitalizeFirstLetter(comparatorString);
 	const formattedTarget = capitalizeFirstLetter(removeQuotes(targetString));
 
-	let conditionName;
 	if (checkBool(target)) {
-		conditionName = target.value ? `condition${collectionCapitalized}Has${sourceType}` : `condition${collectionCapitalized}HasNo${sourceType}`;
+		conditionName = target.value ? `${CONDITION}${collectionCapitalized}Has${sourceType}` : `${CONDITION}${collectionCapitalized}HasNo${sourceType}`;
 	} else {
-		conditionName = `condition${collectionCapitalized}${sourceType}${formattedComparator}${formattedTarget}`;
+		conditionName = `${CONDITION}${collectionCapitalized}${sourceType}${formattedComparator}${formattedTarget}`;
 	}
 
-	let condition;
-	if (variableNames.size === 0) {
-		condition = `()${functionCall}${factName}() ${operatorString} ${targetString}`;
+	if (!variableNames.size) {
+		condition = `()${FUNCTION_CALL}${factName}() ${operatorString} ${targetString}`;
 	} else {
 		const updatedVariableName = variableNames.join(',');
-		condition = `(${updatedVariableName})${functionCall}${factName}(${updatedVariableName}) ${operatorString} ${targetString}`;
+		condition = `(${updatedVariableName})${FUNCTION_CALL}${factName}(${updatedVariableName}) ${operatorString} ${targetString}`;
 	}
 
-	inputMap.set('condition', {[conditionName]: condition});
+	inputMap.set(CONDITION, {[conditionName]: condition});
 
 	return inputMap;
 }
 
 const buildRulePart = (inputMap, ruleName) => {
-
-	const updatedRuleName = `${prefix}Rule${capitalizeFirstLetter(ruleName)}`;
+	const updatedRuleName = `${PREFIX}Rule${capitalizeFirstLetter(ruleName)}`;
 	const resultMap = new Map();
 
-	resultMap.set('object', {})
-	resultMap.set('fact', {})
-	resultMap.set('condition', {})
+	resultMap.set(OBJECT, {});
+	resultMap.set(FACT, {});
+	resultMap.set(CONDITION, {});
 
 	inputMap.forEach((value, key) => {
-		Object.assign(resultMap.get('object'), value.get('object'));
-		Object.assign(resultMap.get('fact'), value.get('fact'));
-		Object.assign(resultMap.get('condition'), value.get('condition'));
+		Object.assign(resultMap.get(OBJECT), value.get(OBJECT));
+		Object.assign(resultMap.get(FACT), value.get(FACT));
+		Object.assign(resultMap.get(CONDITION), value.get(CONDITION));
 	});
 	
 	const openBracket = '(';
 	const closeBracket = ')';
 	const [firstKey] = inputMap.keys();
-	const [lastKey] = [...inputMap].at(-1)
+	const [lastKey] = [...inputMap].at(-1);
 
 	let oldKey = firstKey;
 	let updatedKey = firstKey;
@@ -296,22 +290,22 @@ const buildRulePart = (inputMap, ruleName) => {
 	ruleString = openBracket;
 	counterBrackets++;
 	inputMap.forEach((value, key) => {
-		allUsedVariables.add(value.get('variable'));
+		allUsedVariables.add(value.get(VARIABLE));
 
 		// create correct function call
 		// incl. necessary parameter
-		temp = Object.keys(value.get('condition'));
-		temp += Object.values(value.get('condition'))
-		temp = temp.substring(0, temp.indexOf(' => '))
+		temp = Object.keys(value.get(CONDITION));
+		temp += Object.values(value.get(CONDITION));
+		temp = temp.substring(0, temp.indexOf(FUNCTION_CALL));
 
 		// check for position
 		if (key === oldKey && key.length === oldKey.length) {
 			ruleString += temp;
 
 			if (updatedKey.startsWith('all')) {
-				ruleString += ' && '
+				ruleString += ' && ';
 			} else {
-				ruleString += ' || '
+				ruleString += ' || ';
 			}
 		} else {
 			// get correct position from key
@@ -322,7 +316,6 @@ const buildRulePart = (inputMap, ruleName) => {
 			// add brackets and operator
 			// only if it's not the last key
 			if(key !== lastKey) {
-
 				// only add a bracket if it's a new array
 				if(key.length !== oldKey.length) {
 					ruleString += openBracket;
@@ -331,9 +324,9 @@ const buildRulePart = (inputMap, ruleName) => {
 				ruleString += temp;
 
 				if (updatedKey.startsWith('all')) {
-					ruleString += ' && '
+					ruleString += ' && ';
 				} else {
-					ruleString += ' || '
+					ruleString += ' || ';
 				}
 			} else {
 				ruleString += temp;
@@ -347,18 +340,16 @@ const buildRulePart = (inputMap, ruleName) => {
 	const brackets = closeBracket.repeat(counterBrackets);
 	ruleString += brackets;
 
-	const rule = `(${[...allUsedVariables].flat().join(',')})${functionCall}${ruleString}`;
+	const rule = `(${[...allUsedVariables].flat().join(',')})${FUNCTION_CALL}${ruleString}`;
 	resultMap.set('rule', {[updatedRuleName]: rule});
 
 	return resultMap;
 }
 
-const createFunction = (functionName, functionBody) => {
-	return `Function.create({
+const createFunction = (functionName, functionBody) => `Function.create({
     name: '${functionName}',
     body: '${functionBody}'
-  })`
-}
+  })`;
 
 module.exports = {
 	createObjectMap,
