@@ -4,7 +4,7 @@
   "description": "",
   "main": "composer.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest --verbose"
   },
   "repository": {
     "type": "git",
@@ -20,5 +20,8 @@
   "dependencies": {
     "flat": "^5.0.2",
     "graphql": "^16.6.0"
+  },
+  "devDependencies": {
+    "jest": "^29.3.1"
   }
 }
