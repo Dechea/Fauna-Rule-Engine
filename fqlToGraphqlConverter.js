@@ -1,101 +1,83 @@
-const babel = require("@babel/parser");
+const babel = require('@babel/parser');
 const {
   operatorMap,
-  logicalOperatorMap
-} = require("./constants");
+  logicalOperatorMap,
+} = require('./constants');
 const {
   getObjKeyByValue,
   capitalizeFirstLetter,
-} = require("./helper");
-
-// TEST CASES
-// // object
-// const fql_simple = `user.all.firstWhere(u => u.id == "ckadqdbhk00go0148zzxh4bbq"  && u.name.contains("abc"))`;
-// const fql_and = `user.all.firstWhere(u => u.id == "ckadqdbhk00go0148zzxh4bbq" && u.name.contains("abc")).nationality`;
-// const fql_or = `user.all.firstWhere(u => u.id == "ckadqdbhk00go0148zzxh4bbq" || u.name.contains("abc")).nationality`;
-// const fql_and_var = `user.all.firstWhere(u => u.id == $id && u.name.contains($name)).nationality`;
-// const fql_or_var = `user.all.firstWhere(u => u.id == $id || u.name.contains($name)).nationality`;
-// const fql_complex = `posts.all.firstWhere(p => p.id == $id && p.name == $name && p.something == "bla")`
-// const fql_complex_2 = `posts.all.firstWhere(p => p.id == $id || ( p.name == $name && p.something == "bla") )`
-// const fql_number = `posts.all.firstWhere(p => p.income > 2000  && p.year == 2022)`;
-//
-// // fact
-// // const fql_complex_3 = `posts.all.firstWhere(p => p.id == $id || ( p.name == $name && ( p.something == "bla" && p.income > 2000 ) ) ).nationality`
-// const fql_complex_3 = `posts.all.firstWhere(p => p.id == $id || ( p.name == $name && ( p.something == "bla" || ( p.income > 2000 && p.year == 2022 ) ) ) ).nationality == "DE"`
-// const fql_fact = `posts.all.firstWhere(p => p.id == $id &&  p.name == $name).nationality == "DE"`
-// const fql_fact_variable = '(postsId,postsName) => postsByIdAndName(postsId,postsName).income'
-//
-// // condition
-// // const fact = new Map([[object, fact]]);
-// const fql_condition_boolean = 'posts.all.firstWhere(p => p.id == $id &&  p.name == $name).job == true'
-// const fql_condition_greater_than = 'posts.all.firstWhere(p => p.id == $id &&  p.name == $name).income > 2000'
+} = require('./helper');
 
 const convertMemberExpressionToString = (expression) => {
-  const { object, property } = expression;
-  let result = "";
-  const { type } = object;
+  const {object, property} = expression;
+  let result = '';
+  const {type} = object;
   switch (type) {
-    case "MemberExpression":
+    case 'MemberExpression':
       result += convertMemberExpressionToString(object);
       break;
-    case "Identifier":
+    case 'Identifier':
       result += object.name;
       break;
   }
-  return property.name === 'all'
-    ? result
-    : property.name === 'firstWhere' ? `${result}(where:` : `${result}(${property.name}:`;
-}
+  if (property.name === 'all') {
+    return result;
+  } else if (property.name === 'firstWhere') {
+    return `${result}(where:`;
+  } else {
+    return `${result}(${property.name}:`;
+  }
+};
 
 const checkLogicalExpression = (argument) => {
   const left = getExpression(argument.left);
   const right = getExpression(argument.right);
 
   const operator = argument.operator || argument.operand;
-  const mappedOperand = logicalOperatorMap[operator]
+  const mappedOperand = logicalOperatorMap[operator];
 
   if (operator === '||') {
-    const splitMappedOperands = mappedOperand.split('{')
+    const splitMappedOperands = mappedOperand.split('{');
     return `${left} ${splitMappedOperands[0]} { ${right} ${splitMappedOperands[1]}`;
   } else {
     return `${left} ${mappedOperand} ${right}`;
   }
-}
+};
 
 const convertArgsToString = (argument) => {
-  const { type } = argument;
+  const {type} = argument;
   let result = '';
 
-  switch(type) {
-    case "LogicalExpression":
+  switch (type) {
+    case 'LogicalExpression':
       result += checkLogicalExpression(argument);
       break;
 
-    case "BinaryExpression":
+    case 'BinaryExpression':
       result += getExpression(argument);
       break;
   }
 
   return result;
-}
+};
 
 const parseOperand = (operand) => {
-  const { type } = operand;
-  let result = "";
-  switch(type) {
-    case "Literal":
+  const {type} = operand;
+  let result = '';
+  switch (type) {
+    case 'Literal':
       result += operand.raw;
       break;
-    
-    case "StringLiteral":
+
+    case 'StringLiteral':
       result += operand.extra.raw;
       break;
 
-    case "NumericLiteral":
+    case 'NumericLiteral':
       result += operand.extra.raw;
       break;
 
-    case "MemberExpression":
+    case 'MemberExpression':
       result += operand.property.name;
       break;
 
@@ -103,32 +85,33 @@ const parseOperand = (operand) => {
       result += operand.name;
       break;
 
-    case "CallExpression":
+    case 'CallExpression':
       // const value = operand.arguments[0].raw || operand.arguments[0].extra.raw;
       const node = operand.arguments[0];
       const value = checkCallExpression(node);
-      result += `${operand.callee.object.property.name}.${operand.callee.property.name}(${value})`
+      result += `${operand.callee.object.property.name}.${operand.callee.property.name}(${value})`;
       break;
   }
   return result;
-}
+};
 
 const getExpression = (argument) => {
-  const { type } = argument;
-  let result = "";
+  const {type} = argument;
+  let result = '';
 
-  switch(type){
-    case "BinaryExpression":
+  switch (type) {
+    case 'BinaryExpression':
       const leftOperand = parseOperand(argument.left);
       let rightOperand = parseOperand(argument.right);
       // In case of variables
       // Remove the dynamic part from it
       // Add $ to mark as variable
-      if(rightOperand.includes(capitalizeFirstLetter(leftOperand))) {
+      if (rightOperand.includes(capitalizeFirstLetter(leftOperand))) {
         rightOperand = `$${leftOperand}`;
       }
-      const { operator } = argument;
-      if(operator === '==') {
+
+      const {operator} = argument;
+      if (operator === '==') {
         result += `${leftOperand} : ${rightOperand}`;
       } else {
         result += `${leftOperand} ${operator} ${rightOperand}`;
@@ -136,70 +119,72 @@ const getExpression = (argument) => {
       break;
 
     case 'LogicalExpression':
-      result += convertArgsToString(argument)
+      result += convertArgsToString(argument);
       break;
 
-    case "Literal":
+    case 'Literal':
       result += argument.raw;
       break;
 
-    case "StringLiteral":
+    case 'StringLiteral':
       result += argument.extra.raw;
       break;
 
-    case "MemberExpression":
+    case 'MemberExpression':
       result += argument.property.name;
       break;
-    case "CallExpression":
+    case 'CallExpression':
       const node = argument.arguments[0];
       const value = checkCallExpression(node);
-      // const value = argument.arguments[0].raw || argument.arguments[0].extra.raw;
-      result += `${argument.callee.object.property.name}_${argument.callee.property.name} : ${value}`
+      result += `${argument.callee.object.property.name}_${argument.callee.property.name} : ${value}`;
       break;
   }
   return result;
-}
+};
 
 const checkCallExpression = (callExpression) => {
-  const { name, type, value, raw, extra } = callExpression;
+  const {name, type, value, raw, extra} = callExpression;
 
-  if(type !== 'Identifier') {
+  if (type !== 'Identifier') {
     return value || raw || extra.raw;
-  } else {
-    return name;
   }
 
-}
+  return name;
+};
 
 const convertCallExpressionToString = (expression) => {
-  const { callee, arguments } = expression;
-  const { type } = callee;
-  let result = "";
+  // Necessary for jest
+  // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Strict_mode#changes_in_strict_mode
+  const {callee, arguments: args} = expression;
+  const {type} = callee;
+
+  let result = '';
   switch (type) {
-    case "MemberExpression":
+    case 'MemberExpression':
       result += convertMemberExpressionToString(callee);
       break;
-    case "CallExpression":
+    case 'CallExpression':
       result += convertCallExpressionToString(callee);
       break;
   }
-  return `${result} { ${convertArgsToString(arguments[0].body)}} )`;
-}
+
+  return `${result} { ${convertArgsToString(args[0].body)}} )`;
+};
 
 const convertObjectToString = (object) => {
-  const { type } = object;
+  const {type} = object;
 
   switch (type) {
-    case "CallExpression":
+    case 'CallExpression':
       return convertCallExpressionToString(object);
   }
-}
+};
 
 const convertBinaryExpressionToString = (object) => {
-  let result = "";
-  let baseString = "";
-  let leftString = "";
-  let rightString = "";
+  let result = '';
+  let baseString = '';
+  let leftString = '';
+  let rightString = '';
 
   const operands = [];
   operands.push(object.left);
@@ -209,14 +194,13 @@ const convertBinaryExpressionToString = (object) => {
   let operator = object.operator;
 
   operands.forEach((operand, index) => {
-    const { type } = operand;
-
-    const { object, property } = operand;
+    const {type} = operand;
+    const {object, property} = operand;
 
     switch (type) {
       case 'MemberExpression':
         baseString = convertObjectToString(object);
-        result =`${baseString} { ${property.name}`;
+        result = `${baseString} { ${property.name}`;
         break;
 
       case 'CallExpression':
@@ -229,125 +213,87 @@ const convertBinaryExpressionToString = (object) => {
         break;
 
       case 'StringLiteral':
-        targetType = "String";
+        targetType = 'String';
         baseString = operand.value;
         result = baseString;
         break;
 
       case 'BooleanLiteral':
-        targetType = "Boolean";
+        targetType = 'Boolean';
         baseString = operand.value;
         result = baseString;
         break;
 
       case 'NumericLiteral':
-        targetType = "Number";
+        targetType = 'Number';
         baseString = operand.value;
         result = baseString;
         break;
     }
+
     if (index === 0) {
       leftString = result;
     } else {
-      rightString = result
+      rightString = result;
     }
-
-  })
+  });
 
   return {leftString, rightString, operator, targetType};
-}
+};
 
 const convertFqlToGraphql = (fqlString) => {
   const parsedFQL = babel.parse(fqlString);
-  const { expression } = parsedFQL.program.body[0]
+  const {expression} = parsedFQL.program.body[0];
 
-  const queryStartPart = "query MyQuery {";
-  const queryEndPart = "}}";
+  const queryStartPart = 'query MyQuery {';
+  const queryEndPart = '}}';
 
   let baseString;
 
-  const { type } = expression;
-  const { object, property } = expression;
+  const {type} = expression;
+  const {object, property} = expression;
 
   switch (type) {
     case 'MemberExpression':
       baseString = convertObjectToString(object);
       return {
-        type: "Fact",
+        type: 'Fact',
         name: property.name,
-        value: `${queryStartPart} ${baseString} { ${property.name} ${queryEndPart}`
+        value: `${queryStartPart} ${baseString} { ${property.name} ${queryEndPart}`,
       };
 
     case 'CallExpression':
       baseString = convertCallExpressionToString(expression);
       if (typeof property === 'undefined') {
-        // return `${queryStartPart} ${baseString} }`;
         return baseString;
       } else {
         return {
-          name: property.name ,
-          query: `${queryStartPart} ${baseString} { ${name} ${queryEndPart}`
+          name: property.name,
+          query: `${queryStartPart} ${baseString} { ${name} ${queryEndPart}`,
         };
       }
 
     case 'BinaryExpression':
-      const { leftString, rightString, operator, targetType } = convertBinaryExpressionToString(expression);
+      const {leftString, rightString, operator, targetType} = convertBinaryExpressionToString(expression);
       const leftParts = leftString.split('{');
       const sourceName = leftParts[leftParts.length - 1].replace(' ', '');
 
       return {
-        type: "Condition",
+        type: 'Condition',
         source: {
-          type: "Fact",
+          type: 'Fact',
           name: sourceName,
           value: `${queryStartPart} ${leftString} ${queryEndPart}`,
         },
         comparator: getObjKeyByValue(operatorMap, operator),
         target: {
           type: targetType,
-          value:  rightString
-        }
+          value: rightString,
+        },
       };
   }
-}
-
-const logger = (input) => {
-  console.log('INPUT: ' + input);
-  console.log('OUTPUT:');
-  console.log(convertFqlToGraphql(input));
-  console.log('\n')
-}
-
-// console.log(objectMap)
-// console.log(factMap)
-// console.log(conditionMap)
-
-// logger(fql_simple);
-
-// logger(fql_and);
-
-// logger(fql_or);
-
-// logger(fql_and_var);
-
-// logger(fql_or_var);
-
-// logger(fql_complex);
-
-// logger(fql_number);
-
-// logger(fql_fact);
-
-// logger(fql_condition_boolean);
-
-// logger(fql_condition_greater_than);
-
-// logger(fql_complex_2);
-
-//logger(fql_complex_3);
-
-// logger(fql_condition_greater_than);
+};
 
 module.exports = {
-  convertFqlToGraphql
-}
+  convertFqlToGraphql,
+};

@@ -1,5 +1,5 @@
 const { parse } = require('graphql/language/parser');
-const { capitalizeFirstLetter } = require("./helper");
+const { capitalizeFirstLetter } = require('./helper');
 
 const composeOperator = (stringArray) => {
   let result = stringArray[1];
@@ -7,21 +7,21 @@ const composeOperator = (stringArray) => {
     result += capitalizeFirstLetter(stringArray[index]);
   }
   return result;
-}
+};
 
 const getCollectionSortCriteria = (arg, collectionName) => {
   const [key, direction] = arg.value.value.split('_');
   return `order(${direction.toLowerCase()}(${collectionName} => ${collectionName}.${key}))`;
-}
+};
 
 const buildCriteriaString = (fields, functionName) => {
   let criteriaString = '';
   for (let index = 0; index < fields.length; index++) {
-    const splittedString = fields[index].name.value.split("_");
+    const splittedString = fields[index].name.value.split('_');
     const key = splittedString[0];
 
-    if(index == 0){
-      criteriaString += `${functionName} => `; 
+    if (index == 0) {
+      criteriaString += `${functionName} => `;
     }
 
     if (splittedString.length === 1) {
@@ -35,8 +35,7 @@ const buildCriteriaString = (fields, functionName) => {
       }
       // const value = fields[index].value.value;
 
-    }
-    else {
+    } else {
       const operator = composeOperator(splittedString);
       const value = fields[index].value.value;
 
@@ -47,13 +46,13 @@ const buildCriteriaString = (fields, functionName) => {
 
 
   return criteriaString;
-}
+};
 
 const getCollectionFilterCriteria = (arg, functionName) => {
-  const { fields } = arg.value;
+  const {fields} = arg.value;
   const criteriaString = buildCriteriaString(fields, functionName);
   return `firstWhere(${criteriaString})`;
-}
+};
 
 const getCollectionLevelCriteria = (args, collectionName) => {
   let sortCriteria = null;
@@ -62,52 +61,34 @@ const getCollectionLevelCriteria = (args, collectionName) => {
     const keyword = arg.name.value;
     if (keyword === 'orderBy') {
       sortCriteria = getCollectionSortCriteria(arg, collectionName);
-    }
-    else if (keyword === 'where') {
+    } else if (keyword === 'where') {
       filterCriteria = getCollectionFilterCriteria(arg, collectionName);
     }
   }
-  return { sortCriteria, filterCriteria };
-}
+  return {sortCriteria, filterCriteria};
+};
 
 const buildArrayExpression = (name, args) => {
-  const { fields } = args[0].value;
+  const {fields} = args[0].value;
   const criteriaString = buildCriteriaString(fields, name.charAt(0));
   return `${name}.filter(${criteriaString}).at(0)`;
-}
+};
 
 const getLastExpression = (input, result) => {
-  if (!input) return result;
+  if (!input) {
+    return result;
+  }
   result += '.';
   const selections = input.selections[0];
   const name = selections?.name?.value;
   const args = selections?.arguments;
-  if (!args || args.length == 0) {
+  if (!args || args.length === 0) {
     result += name;
-  }
-  else {
+  } else {
     result += buildArrayExpression(name, args);
   }
   return getLastExpression(selections.selectionSet, result);
-}
-
-// TRP_TreatmentPlans.all.order(asc(.name)).firstWhere(.name.startsWith("Jamie"))
-//.treatments.filter(.title.startsWith("Union")).at(0).selectedItems
-
-// const query = `
-// query MyQuery {
-//   TRP_TreatmentPlans(orderBy: name_ASC, where: {id: "ckadqdbhk00go0148zzxh4bbq", updatedAt: "", name_contains: ""}) {
-//     treatments(where: {title_starts_with: "Union"}) {
-//       selectedItems {
-//         quantity {
-//           items
-//         }
-//       }
-//     }
-//   }
-// }  
-// `;
-const query = `query User {user(where: {id: "ckadqdbhk00go0148zzxh4bbq", name_contains: "abc"}) {nationality}}`;
+};
 
 const getBaseQuery = (query) => {
   let fqlString = '';
@@ -117,13 +98,13 @@ const getBaseQuery = (query) => {
   const args = selections.arguments;
 
   fqlString += `${collectionName}.all`;
-  const { sortCriteria, filterCriteria } = getCollectionLevelCriteria(args, collectionName.charAt(0));
+  const {sortCriteria, filterCriteria} = getCollectionLevelCriteria(args, collectionName.charAt(0));
 
   fqlString += sortCriteria ? `.${sortCriteria}` : '';
   fqlString += filterCriteria ? `.${filterCriteria}` : '';
 
   return fqlString;
-}
+};
 
 const convertGraphQLToFQL = (query) => {
   let fqlString = '';
@@ -133,7 +114,7 @@ const convertGraphQLToFQL = (query) => {
   const args = selections.arguments;
 
   fqlString += `${collectionName}.all`;
-  const { sortCriteria, filterCriteria } = getCollectionLevelCriteria(args, collectionName.charAt(0));
+  const {sortCriteria, filterCriteria} = getCollectionLevelCriteria(args, collectionName.charAt(0));
 
   fqlString += sortCriteria ? `.${sortCriteria}` : '';
   fqlString += filterCriteria ? `.${filterCriteria}` : '';
@@ -144,8 +125,6 @@ const convertGraphQLToFQL = (query) => {
 
   return fqlString;
 };
-
-// console.log(convertGraphQLToFQL(query));
 
 module.exports = {
   convertGraphQLToFQL,
